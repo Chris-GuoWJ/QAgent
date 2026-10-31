@@ -18,14 +18,17 @@ ROOT = Path(__file__).parents[1]
 def test_graph_checkpoints_and_resume(make_controller, task):
     controller = make_controller()
     run_id = controller.create(task).run_id
-    first = drive(controller, run_id, max_steps=2, poll_interval=0)
+    first_events = []
+    first = drive(controller, run_id, max_steps=2, poll_interval=0, on_event=first_events.append)
     assert first["stage"] == "wait" and first["outcome"] is None
     with SqliteSaver.from_conn_string(str(controller.store.root / "checkpoints.sqlite")) as saver:
         checkpoint = saver.get_tuple({"configurable": {"thread_id": run_id}})
         assert checkpoint.checkpoint["channel_values"]["run_id"] == run_id
     rebuilt = make_controller()
-    result = drive(rebuilt, run_id, poll_interval=0)
+    resumed_events = []
+    result = drive(rebuilt, run_id, poll_interval=0, on_event=resumed_events.append)
     assert result["outcome"] == "success"
+    assert min(e["seq"] for e in resumed_events) > max(e["seq"] for e in first_events)
     with sqlite3.connect(rebuilt.backend.path) as db:
         assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == result["budget"]["experiments"]
 

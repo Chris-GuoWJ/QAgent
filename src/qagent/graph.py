@@ -32,7 +32,7 @@ def build_graph(controller, checkpointer):
     return builder.compile(checkpointer=checkpointer)
 
 
-def drive(controller, run_id: str, max_steps: int | None = None, poll_interval: float = 0.05, on_event=None):
+def drive(controller, run_id: str, max_steps: int | None = None, poll_interval: float = 0.05, on_event=None, pause_event=None):
     """A fresh graph invocation dispatches from durable business state each tick.
 
     This deliberately reconciles external effects instead of blindly replaying a
@@ -46,9 +46,12 @@ def drive(controller, run_id: str, max_steps: int | None = None, poll_interval: 
         with SqliteSaver.from_conn_string(str(controller.store.root / "checkpoints.sqlite")) as saver:
             graph = build_graph(controller, saver)
             config = {"configurable": {"thread_id": run_id}}
-            cursor = 0
+            prior_events = controller.store.events(run_id)
+            cursor = prior_events[-1]["seq"] if prior_events else 0
             steps = 0
             while controller.store.load(run_id).stage != "finished":
+                if pause_event is not None and pause_event.is_set():
+                    break
                 graph.invoke({"run_id": run_id}, config=config, durability="sync")
                 steps += 1
                 events = controller.store.events(run_id, cursor)

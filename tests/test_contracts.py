@@ -63,6 +63,7 @@ class Block(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, Block())
 import qagent, qagent.schemas, qagent.controller, qagent.policy, qagent.analysis
 import qagent.state, qagent.storage, qagent.graph
+import qagent.chat, qagent.chat_tools, qagent.chat_history, qagent.terminal
 print("isolated")
 '''
     env = os.environ.copy()

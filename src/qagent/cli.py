@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .schemas import CalibrationTask
+from .config import read_json_config
 from .storage import Store
 
 
@@ -16,7 +17,14 @@ def emit(value):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="qagent", description="Controlled calibration agent MVP")
     parser.add_argument("--storage", type=Path, default=Path("runs"), help="Persistent run storage")
-    commands = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument("-n", "--message", help="Send one natural-language instruction and wait for launched work")
+    parser.add_argument("-r", "--session", help="Resume a conversation by session ID")
+    commands = parser.add_subparsers(dest="command")
+    chat = commands.add_parser("chat", help="Talk to the agent in natural language (the default)")
+    chat.add_argument("--runtime", type=Path)
+    chat.add_argument("--profile", type=Path)
+    chat.add_argument("-n", "--message", default=argparse.SUPPRESS)
+    chat.add_argument("-r", "--session", default=argparse.SUPPRESS)
     for command in ["start", "resume"]:
         child = commands.add_parser(command)
         child.add_argument("--runtime", type=Path, help="Trusted runtime configuration JSON")
@@ -34,6 +42,11 @@ def main(argv=None):
             child.add_argument("--after", type=int, default=0)
     args = parser.parse_args(argv)
     try:
+        if args.command in {None, "chat"}:
+            from .terminal import launch_chat
+
+            return launch_chat(args.storage, getattr(args, "runtime", None), getattr(args, "profile", None),
+                               args.session, args.message)
         if args.command in {"start", "resume"} and args.max_steps is not None and args.max_steps < 1:
             raise ValueError("max-steps must be positive")
         store = Store(args.storage)
@@ -57,7 +70,7 @@ def main(argv=None):
             settings = load_runtime(args.runtime)
             controller = create_controller(store, settings)
             if args.command == "start":
-                task = CalibrationTask.model_validate_json(args.task.read_text(encoding="utf-8"))
+                task = CalibrationTask.model_validate(read_json_config(args.task))
                 run_id = controller.create(task, provenance(settings)).run_id
                 if not args.quiet:
                     emit({"event": "run_started", "run_id": run_id})

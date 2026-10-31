@@ -1,6 +1,6 @@
 # QAgent：超导量子校准 Agent MVP
 
-首版实现单比特频谱搜索的受控闭环：决策、参数校验、实验提交与等待、数值分析、独立验证和报告。支持固定基线策略与 DeepSeek API 决策；默认使用独立的模拟后端，不连接真实设备。
+默认入口是自然语言 CLI：用户在终端与 DeepSeek 对话，由模型调用受控工具启动校准、查询进度、查看结果、恢复和停止任务。实验执行在后台进行，终端持续显示真实进度。当前支持单比特频谱校准，默认使用独立模拟后端，不连接真实设备。
 
 原需求见 [MVP_DESIGN.md](MVP_DESIGN.md)，技术设计见 [LANGCHAIN_IMPLEMENTATION_DESIGN.md](LANGCHAIN_IMPLEMENTATION_DESIGN.md)。当前实现范围与验证记录见 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)。
 
@@ -11,16 +11,62 @@
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[deepseek,test]"
-.\.venv\Scripts\qagent.exe --storage runs start --task configs/task.spectroscopy.json --runtime configs/runtime.fixed.json
+
+# 在当前终端设置实际模型名和密钥；应用不会读取 .env 文件。
+$env:DEEPSEEK_API_KEY = "你的密钥"
+$env:DEEPSEEK_MODEL = "实际服务提供的模型标识"
+$env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+.\.venv\Scripts\qagent.exe
 ```
 
-固定策略无需 API 密钥。控制台逐行输出 JSON 事件，最后输出 `run_snapshot`，其中包含 `run_id`、状态、预算和报告位置。事件来自执行记录，不是模型生成的进度描述。`--quiet` 仅输出最后的快照。
+启动后直接输入自然语言，例如：
+
+```text
+你 > 你现在可以帮我做什么？
+你 > 帮我校准 Q0 的共振频率
+你 > 现在进行到哪一步了，还剩多少预算？
+你 > 停止当前任务
+你 > 看看刚才的实验结果，解释一下有没有通过验证
+```
+
+这些指令由模型理解，不是固定关键词匹配。工具只开放校准业务能力；没有文件读写、Shell 或直接修改设备参数的能力。模型与后台执行器都不读取 `.env` 或 `.env.*` 文件。所有实验参数仍受任务约定和控制器检查约束。
+
+默认展示 Q0、4.8–5.2 GHz 的示例任务约定，最多 8 次实验。可在此约定内用自然语言收窄范围、减少预算、指定初始采样或收紧精度；超出目标、范围或预算的要求不会执行。其他目标或实验需要另行配置对应任务约定与分析能力。
+
+实验在本 CLI 进程的后台线程执行，问进度、查看结果与请求停止不必等待完整校准结束。输入 `/exit` 或 Ctrl+D 退出对话，执行器会在控制边界暂停并保留任务；不会宣称设备任务已被取消。后台线程不是关闭终端后继续运行的系统服务。
+
+可选入口：
+
+```powershell
+# 一条自然语言指令；如果启动了任务，会等待本进程执行器返回。
+.\.venv\Scripts\qagent.exe -n "帮我校准 Q0 的共振频率"
+
+# 使用启动时显示的对话编号恢复会话，模型保留前文和选中的任务。
+.\.venv\Scripts\qagent.exe -r SESSION_ID
+
+# 自定义可信运行配置和预先约定的任务范围。
+.\.venv\Scripts\qagent.exe chat --runtime configs/runtime.deepseek.json --profile configs/task.spectroscopy.json
+```
+
+对话编号 `SESSION_ID` 与实验编号 `RUN_ID` 分别标识对话和校准任务。恢复对话不会盲目重放中断的启动或恢复工具调用；应先问已有任务状态，再明确要求继续。对话以 JSON 消息保存到业务数据库，不保存密钥配置。
+
+如果会话使用了自定义运行配置或任务约定，恢复时也要传入原来的 `--runtime` 和 `--profile`。
+
+恢复保留原任务的预算和墙钟时限，退出对话的时间仍计入时限。恢复不会自动延长授权时长；已过期时，控制器会结束任务并说明原因。
+
+如需在没有 API 密钥时验证执行框架，仍可使用固定策略入口：
+
+```powershell
+.\.venv\Scripts\qagent.exe --storage runs-fixed start --task configs/task.spectroscopy.json --runtime configs/runtime.fixed.json
+```
+
+固定策略入口输出 JSON 事件和 `run_snapshot`，`--quiet` 仅输出最后快照；它是程序化执行接口，不承担自然语言理解。
 
 复现本轮测试依赖时，可先安装 `requirements-lock.txt`，再执行 `python -m pip install -e . --no-deps`。该锁定清单对应本轮 Windows / Python 3.11 环境；全新环境及其他平台仍需验证。
 
 `configs/task.spectroscopy.json` 的范围、预算和精度仅用于演示，不代表设备允许值或真机验收要求。`configs/runtime.fixed.json` 的模拟配置由启动装配层传给模拟适配器，不进入模型上下文。
 
-## 2. 查看、暂停、恢复和停止
+## 2. 程序化命令：查看、暂停、恢复和停止
 
 ```powershell
 # 执行两次状态转换后退出，保留可恢复状态。
@@ -53,9 +99,9 @@ $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 .\.venv\Scripts\qagent.exe --storage runs-deepseek start --task configs/task.spectroscopy.json --runtime configs/runtime.deepseek.json
 ```
 
-如果使用第三方兼容网关，替换 `DEEPSEEK_BASE_URL` 和模型标识，并先确认其工具调用支持情况。应用不会自动读取 `.env`；`.env.example` 只是配置说明，不应填入真实密钥后提交。
+如果使用第三方兼容网关，替换 `DEEPSEEK_BASE_URL` 和模型标识，并先确认其工具调用支持情况。应用禁止读取 `.env` 和 `.env.*`，只使用已经设置好的进程环境变量；显式将这类文件作为配置参数传入也会被拒绝。
 
-默认通过 LangChain `ChatDeepSeek.with_structured_output()` 的 `function_calling` 模式产生 `scan`、`verify`、`finish` 决策。可以在运行配置的 `deepseek` 对象中选择 `json_mode`，但不同网关和模型的能力仍需真实请求验证。可选的 `thinking` 值为 `enabled` 或 `disabled`，未配置时不发送该参数。
+对话层通过 LangChain `bind_tools()` 选择校准业务工具，工具结果再返回模型形成自然语言答复。校准内部默认通过 `ChatDeepSeek.with_structured_output()` 的 `function_calling` 模式产生 `scan`、`verify`、`finish` 决策。可以在运行配置的 `deepseek` 对象中选择内部决策的 `json_mode`，但自然语言 CLI 仍要求模型支持工具调用。不同网关和模型的能力需真实请求验证。可选的 `thinking` 值为 `enabled` 或 `disabled`，未配置时不发送该参数。
 
 模型只接收任务约定、剩余预算、后端能力、分析摘要和错误反馈，没有文件系统或 Shell 工具，也不会接收到模拟真值、噪声种子及连接密钥。模型调用的 SDK 自动重试设为 0，控制器按任务错误上限处理下一次决策调用，避免重试层级叠加。
 
@@ -76,6 +122,8 @@ $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 | `src/qagent/analysis.py` | 数值拟合及质量判断 |
 | `src/qagent/storage.py` | SQLite 业务日志、操作系统锁与原子写入的数据文件 |
 | `src/qagent/cli.py` | 启动、查看、恢复和停止 |
+| `src/qagent/chat.py`、`chat_tools.py` | 自然语言模型工具循环及受控的校准操作 |
+| `src/qagent/chat_history.py`、`terminal.py` | 持久化会话、终端输入和后台进度显示 |
 | `tests/` | 控制器、后端契约、替换、恢复、CLI 和模型适配测试 |
 
 核心控制器依赖 `ExperimentBackend` 协议；模拟器不由核心模块导入。模拟生成代码没有额外的专用依赖，分析所需的 NumPy/SciPy 属于分析依赖。真机 SDK 应由相应适配器按需导入。
@@ -117,6 +165,8 @@ $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 | `runs/backend.sqlite` | 示例模拟后端自己的任务记录，不由控制器直接读取 |
 | `runs/<run_id>/<request_id>.json` | 本轮测量数据 |
 | `runs/<run_id>/report.json` | 结论、证据、预算、活动请求与局限 |
+
+启用对话后，`journal.sqlite` 另外保存对话会话和模型消息，采用显式 JSON 消息序列化。进程重启后的对话恢复与实验恢复分别处理；已经创建的实验通过业务日志关联，不因丢失一条聊天工具回执而重新创建。
 
 每次 LangGraph 调用执行一次业务状态转换，再由驱动器推进下一步。恢复从业务日志分派阶段；提交意图已经登记且没有回执时，先核对后端。checkpoint 便于检查图执行，业务日志和后端回执共同决定是否允许下一次外部操作。
 

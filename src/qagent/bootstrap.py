@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import Field
 
 from .controller import Controller
+from .config import read_json_config
 from .policy import FixedPolicy
 from .schemas import Model
 from .storage import Store
@@ -24,7 +25,18 @@ class RuntimeSettings(Model):
 
 
 def load_runtime(path: Path | None) -> RuntimeSettings:
-    return RuntimeSettings.model_validate(json.loads(path.read_text(encoding="utf-8"))) if path else RuntimeSettings()
+    return RuntimeSettings.model_validate(read_json_config(path)) if path else RuntimeSettings()
+
+
+def deepseek_settings(settings: RuntimeSettings):
+    from .policies.deepseek import DeepSeekSettings
+
+    config = dict(settings.deepseek)
+    config["model"] = config.get("model") or os.environ.get("DEEPSEEK_MODEL", "")
+    if not config["model"]:
+        raise ValueError("请设置进程环境变量 DEEPSEEK_MODEL；不会自动读取 .env 文件")
+    config.setdefault("base_url", os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"))
+    return DeepSeekSettings.model_validate(config)
 
 
 def create_controller(store: Store, settings: RuntimeSettings) -> Controller:
@@ -36,12 +48,9 @@ def create_controller(store: Store, settings: RuntimeSettings) -> Controller:
     if settings.policy == "fixed":
         policy = FixedPolicy()
     else:
-        from .policies.deepseek import DeepSeekPolicy, DeepSeekSettings
+        from .policies.deepseek import DeepSeekPolicy
 
-        config = dict(settings.deepseek)
-        config["model"] = config.get("model") or os.environ.get("DEEPSEEK_MODEL", "")
-        config.setdefault("base_url", os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"))
-        policy = DeepSeekPolicy(DeepSeekSettings.model_validate(config))
+        policy = DeepSeekPolicy(deepseek_settings(settings))
     return Controller(store, backend, policy)
 
 

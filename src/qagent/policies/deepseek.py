@@ -31,6 +31,20 @@ class DeepSeekSettings(Model):
     thinking: str | None = None
 
 
+def create_chat_model(settings: DeepSeekSettings):
+    """Shared DeepSeek client factory; reads process variables, never files."""
+    from langchain_deepseek import ChatDeepSeek
+
+    key = os.environ.get(settings.api_key_env)
+    if not key:
+        raise ValueError(f"Set environment variable {settings.api_key_env} before using DeepSeek; .env files are not read")
+    params = dict(model=settings.model, api_key=key, api_base=settings.base_url,
+                  timeout=settings.timeout_seconds, max_retries=0)
+    if settings.thinking:
+        params["extra_body"] = {"thinking": {"type": settings.thinking}}
+    return ChatDeepSeek(**params)
+
+
 class DeepSeekPolicy:
     def __init__(self, settings: DeepSeekSettings, runnable=None):
         if settings.output_method not in {"function_calling", "json_mode"}:
@@ -41,16 +55,7 @@ class DeepSeekPolicy:
         self.identity = "deepseek:" + fingerprint
         self._instructions = INSTRUCTIONS + "\nDecision JSON schema:\n" + json.dumps(Decision.model_json_schema())
         if runnable is None:
-            from langchain_deepseek import ChatDeepSeek
-
-            key = os.environ.get(settings.api_key_env)
-            if not key:
-                raise ValueError(f"Set environment variable {settings.api_key_env} before using the DeepSeek policy")
-            params = dict(model=settings.model, api_key=key, api_base=settings.base_url,
-                          timeout=settings.timeout_seconds, max_retries=0)
-            if settings.thinking:
-                params["extra_body"] = {"thinking": {"type": settings.thinking}}
-            model = ChatDeepSeek(**params)
+            model = create_chat_model(settings)
             runnable = model.with_structured_output(Decision, method=settings.output_method, include_raw=True)
         self._runnable = runnable
 
