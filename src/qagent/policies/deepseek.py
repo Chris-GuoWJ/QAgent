@@ -37,7 +37,7 @@ def create_chat_model(settings: DeepSeekSettings):
 
     key = os.environ.get(settings.api_key_env)
     if not key:
-        raise ValueError(f"Set environment variable {settings.api_key_env} before using DeepSeek; .env files are not read")
+        raise ValueError(f"缺少 {settings.api_key_env}：请在启动目录 .env 或进程环境变量中设置密钥，不要将密钥粘贴到对话中")
     params = dict(model=settings.model, api_key=key, api_base=settings.base_url,
                   timeout=settings.timeout_seconds, max_retries=0)
     if settings.thinking:

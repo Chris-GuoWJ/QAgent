@@ -30,11 +30,13 @@ def load_runtime(path: Path | None) -> RuntimeSettings:
 
 def deepseek_settings(settings: RuntimeSettings):
     from .policies.deepseek import DeepSeekSettings
+    from .credentials import load_local_credentials
 
     config = dict(settings.deepseek)
+    load_local_credentials(extra_keys=(config.get("api_key_env", "DEEPSEEK_API_KEY"),))
     config["model"] = config.get("model") or os.environ.get("DEEPSEEK_MODEL", "")
     if not config["model"]:
-        raise ValueError("请设置进程环境变量 DEEPSEEK_MODEL；不会自动读取 .env 文件")
+        raise ValueError("缺少 DEEPSEEK_MODEL：请在当前目录 .env 或进程环境变量中设置模型标识")
     config.setdefault("base_url", os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"))
     return DeepSeekSettings.model_validate(config)
 

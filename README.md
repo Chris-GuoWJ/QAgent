@@ -12,10 +12,7 @@
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[deepseek,test]"
 
-# 在当前终端设置实际模型名和密钥；应用不会读取 .env 文件。
-$env:DEEPSEEK_API_KEY = "你的密钥"
-$env:DEEPSEEK_MODEL = "实际服务提供的模型标识"
-$env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+# 已在本机当前目录 .env 配置 DeepSeek 后，直接启动。
 .\.venv\Scripts\qagent.exe
 ```
 
@@ -29,7 +26,7 @@ $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 你 > 看看刚才的实验结果，解释一下有没有通过验证
 ```
 
-这些指令由模型理解，不是固定关键词匹配。工具只开放校准业务能力；没有文件读写、Shell 或直接修改设备参数的能力。模型与后台执行器都不读取 `.env` 或 `.env.*` 文件。所有实验参数仍受任务约定和控制器检查约束。
+这些指令由模型理解，不是固定关键词匹配。工具只开放校准业务能力；没有文件读写、Shell 或直接修改设备参数的能力。启动器从当前目录 `.env` 加载必要模型凭证，模型与对话工具无法访问文件内容或密钥。所有实验参数仍受任务约定和控制器检查约束。
 
 默认展示 Q0、4.8–5.2 GHz 的示例任务约定，最多 8 次实验。可在此约定内用自然语言收窄范围、减少预算、指定初始采样或收紧精度；超出目标、范围或预算的要求不会执行。其他目标或实验需要另行配置对应任务约定与分析能力。
 
@@ -90,7 +87,9 @@ $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 ## 3. 使用 DeepSeek API
 
-先安装 `deepseek` 可选依赖，设置环境变量：
+先安装 `deepseek` 可选依赖。在启动目录的 `.env` 中配置 `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL`，可选配置 `DEEPSEEK_BASE_URL`，再运行 `qagent`。虚拟环境本身不会自动把文件变成环境变量；应用的启动器负责加载。
+
+也可以直接设置进程环境变量；已有的非空进程值优先于 `.env`，显式 JSON 模型配置仍优先于环境值。下面是可选的 PowerShell 配置方式：
 
 ```powershell
 $env:DEEPSEEK_API_KEY = "你的密钥"
@@ -99,7 +98,11 @@ $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 .\.venv\Scripts\qagent.exe --storage runs-deepseek start --task configs/task.spectroscopy.json --runtime configs/runtime.deepseek.json
 ```
 
-如果使用第三方兼容网关，替换 `DEEPSEEK_BASE_URL` 和模型标识，并先确认其工具调用支持情况。应用禁止读取 `.env` 和 `.env.*`，只使用已经设置好的进程环境变量；显式将这类文件作为配置参数传入也会被拒绝。
+如果使用第三方兼容网关，替换 `DEEPSEEK_BASE_URL` 和模型标识，并先确认其工具调用支持情况。启动器只导入 DeepSeek 变量及运行配置明确指定的密钥变量，不导入其他 `.env` 设置；不搜索上级目录，不进行变量插值。UTF-8 BOM 文件受支持。`.env` 不能作为任务或运行 JSON 文件传入，也不会提供给模型读取。
+
+开发和自动化验证应设置 `QAGENT_NO_ENV_FILE=1`，禁用真实凭证文件加载。测试仅使用替身加载器或内存数据，不读取用户实际 `.env`，也不会输出密钥。
+
+正常使用 `.env` 启动时不要设置该禁用开关；若之前在同一终端运行了开发命令，可用 `Remove-Item Env:QAGENT_NO_ENV_FILE -ErrorAction SilentlyContinue` 取消。pytest 的保护 fixture 也会在测试进程内自动禁用真实文件加载。
 
 对话层通过 LangChain `bind_tools()` 选择校准业务工具，工具结果再返回模型形成自然语言答复。校准内部默认通过 `ChatDeepSeek.with_structured_output()` 的 `function_calling` 模式产生 `scan`、`verify`、`finish` 决策。可以在运行配置的 `deepseek` 对象中选择内部决策的 `json_mode`，但自然语言 CLI 仍要求模型支持工具调用。不同网关和模型的能力需真实请求验证。可选的 `thinking` 值为 `enabled` 或 `disabled`，未配置时不发送该参数。
 

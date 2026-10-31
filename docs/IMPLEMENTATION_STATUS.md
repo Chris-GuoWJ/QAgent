@@ -2,7 +2,7 @@
 
 日期：2026-10-31
 
-实现版本：0.2.0（自然语言 CLI；执行控制器为 0.1.0）
+实现版本：0.2.1（自然语言 CLI 与本地凭证加载；执行控制器为 0.1.0）
 
 ## 1. 已实现范围
 
@@ -23,6 +23,7 @@
 | 程序化 CLI | 保留 start、resume、status、events、stop、list |
 | 后台进度 | 测量线程独立运行，终端显示真实事件，状态变化去重；对话退出在控制边界暂停 |
 | 文件访问边界 | 无文件读写或 Shell 工具；显式配置路径拒绝 .env 及同类文件 |
+| 本地凭证 | 用户启动程序时加载当前目录 .env 的 DeepSeek 变量，保留非空进程值优先级；开发验证禁用真实文件加载 |
 
 ## 2. 测试证据
 
@@ -31,12 +32,17 @@
 最终执行命令：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q --basetemp D:\QAgent\QAgent\runs\pytest-conversation-release-2 -p no:cacheprovider
+$env:QAGENT_NO_ENV_FILE = "1"
+.\.venv\Scripts\python.exe -m pytest -q --basetemp D:\QAgent\QAgent\runs\pytest-credential-loading -p no:cacheprovider
 ```
 
 0.1.0 的执行框架回归曾通过 51 项测试；0.2.0 在同一控制器上增加对话与工具协议测试。全部记录均不包含在线 API 或真机实验。
 
 0.2.0 最终结果：**88 passed，0 failed**，耗时 75.03 秒。包含真实 prompt-toolkit 交互循环的受控输入测试、真实 LangChain 客户端的本地 Mock HTTP 工具调用测试、Windows 环境文件大小写保护，以及已结束任务的停止反馈检查。
+
+0.2.1 修正凭证加载边界：禁止开发 Agent 浏览凭证文件，不禁止用户应用在启动时加载凭证。新增测试采用替身加载器和隔离字典，覆盖变量白名单、进程值优先级、空值、自定义密钥变量、禁用开关、错误脱敏和模型配置接线；不读取任何实际 .env 内容。
+
+0.2.1 验证结果：**96 passed，0 failed**，耗时 79.79 秒。开发验证过程始终禁用用户真实凭证文件加载；未核对用户实际变量值或进行在线 API 联调。
 
 测试覆盖以下范围，具体测试定义见 `tests/`：
 

@@ -9,6 +9,12 @@ from qagent.schemas import CalibrationTask, Capabilities, JobStatus, LookupResul
 from qagent.storage import Store
 
 
+@pytest.fixture(autouse=True)
+def protect_user_environment_files(monkeypatch):
+    """No test or child CLI process may open the user's real credential file."""
+    monkeypatch.setenv("QAGENT_NO_ENV_FILE", "1")
+
+
 class ReplayBackend:
     """An independent protocol implementation, with no simulator inheritance."""
 
