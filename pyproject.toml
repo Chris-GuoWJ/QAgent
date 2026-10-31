@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qagent-calibration"
+version = "0.1.0"
+description = "A controlled, backend-independent quantum calibration agent MVP"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7,<3",
+  "numpy>=1.24,<3",
+  "scipy>=1.10,<2",
+  "langgraph>=1.0,<2",
+  "langgraph-checkpoint-sqlite>=3,<4",
+]
+
+[project.optional-dependencies]
+deepseek = ["langchain-deepseek>=1,<2", "httpx[socks]>=0.27,<1"]
+test = ["pytest>=8,<10"]
+
+[project.scripts]
+qagent = "qagent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"

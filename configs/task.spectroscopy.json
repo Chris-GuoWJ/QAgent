@@ -1,0 +1,14 @@
+{
+  "qubit": "Q0",
+  "lower_hz": 4800000000,
+  "upper_hz": 5200000000,
+  "initial_points": 81,
+  "initial_shots": 256,
+  "max_experiments": 8,
+  "max_measurements": 500000,
+  "timeout_seconds": 120,
+  "max_errors": 3,
+  "target_uncertainty_hz": 300000,
+  "verification_tolerance_hz": 1000000,
+  "min_snr": 6
+}
