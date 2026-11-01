@@ -3,7 +3,7 @@
 import time
 from uuid import uuid4
 
-from .analysis import analyze
+from .analysis import analyze, derive_spectrum
 from .backend.base import ExperimentBackend, SubmissionRejected
 from .policy import DecisionPolicy
 from .schemas import CalibrationTask, Decision, ExperimentRequest, Measurement, RunState, ScanConfig, VerificationResult
@@ -259,7 +259,8 @@ class Controller:
             current = state.current
             if (measurement.request_id != current.request_id or measurement.job_id != current.job_id
                     or measurement.qubit != current.qubit or measurement.experiment_type != current.experiment_type
-                    or measurement.config != current.config):
+                    or measurement.config != current.config or measurement.data_type != self.capabilities.data_type
+                    or measurement.response_mode != self.capabilities.response_mode):
                 raise ValueError("backend result does not match the accepted experiment")
             state.current_data_ref = self.store.write_artifact(state.run_id,
                 current.request_id + ".json", measurement.model_dump())
@@ -271,6 +272,13 @@ class Controller:
     def _analyze(self, state):
         measurement = Measurement.model_validate(self.store.read_artifact(state.current_data_ref))
         result = analyze(measurement, state.task, state.current_data_ref)
+        try:
+            spectrum = derive_spectrum(measurement)
+            result.spectrum_ref = self.store.write_artifact(state.run_id,
+                measurement.request_id + ".spectrum.json", spectrum)
+        except (ValueError, FloatingPointError):
+            # Always retain original IQ even when deriving the spectrum fails.
+            pass
         state.analyses.append(result)
         current = state.current
         if current.purpose == "verification":
@@ -279,6 +287,8 @@ class Controller:
                           if result.frequency_hz is not None else None)
             passed = bool(candidate.trusted and result.trusted
                 and candidate.data_ref != result.data_ref
+                and candidate.data_type == result.data_type
+                and candidate.response_mode == result.response_mode
                 and result.uncertainty_hz <= state.task.target_uncertainty_hz
                 and difference <= state.task.verification_tolerance_hz)
             verification = VerificationResult(candidate_id=candidate.analysis_id, analysis_id=result.analysis_id,
@@ -317,7 +327,8 @@ class Controller:
                        "reserved_measurements": state.reserved_measurements},
             "active_request": state.current.model_dump() if state.current else None,
             "decisions": [d.model_dump() for d in state.decisions], "metadata": state.metadata,
-            "limitations": ["Single-qubit spectroscopy demonstration; positive Lorentzian response assumed",
+            "measurement_type": self.capabilities.data_type, "response_mode": self.capabilities.response_mode,
+            "limitations": ["Single-qubit spectroscopy; a single IQ-amplitude peak/dip or explicit legacy probability peak is assumed",
                 "Uncertainty is a fit estimate with a grid-resolution floor, not validated hardware accuracy",
                 "Existing external jobs are not implicitly cancelled when execution stops"]}
         self.store.write_artifact(run_id, "report.json", report)

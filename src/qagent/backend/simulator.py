@@ -9,9 +9,11 @@ from pathlib import Path
 from uuid import uuid4
 
 import numpy as np
-from pydantic import Field
+from typing import Literal
 
-from ..schemas import Capabilities, ExperimentRequest, JobStatus, LookupResult, Measurement, Model
+from pydantic import Field, model_validator
+
+from ..schemas import Capabilities, ExperimentRequest, IQData, JobStatus, LookupResult, Measurement, Model
 from .base import BackendError, SubmissionUnknown
 
 
@@ -19,12 +21,40 @@ class SimulationSettings(Model):
     true_frequency_hz: float = Field(default=5.0317e9, gt=0)
     linewidth_hz: float = Field(default=5e6, gt=0)
     noise_std: float = Field(default=0.2, ge=0)
-    contrast: float = Field(default=0.65, ge=0, le=0.8)
+    contrast: float = Field(default=0.65, ge=0)
     duration_seconds: float = Field(default=0.05, ge=0)
     seed: int = 42
     fail_jobs: bool = False
     ambiguous_submit: bool = False
     unknown_lookup: bool = False
+    data_type: Literal["iq", "probability"] = "iq"
+    response_mode: Literal["peak", "dip"] = "dip"
+    iq_mode: Literal["averaged", "single_shot"] = "averaged"
+    baseline: float = Field(default=1.25, gt=0)
+    phase_radians: float = 0.35
+
+    @model_validator(mode="before")
+    @classmethod
+    def probability_mode(cls, data):
+        if isinstance(data, dict) and data.get("data_type") == "probability":
+            data = dict(data)
+            data.setdefault("response_mode", "peak")
+        return data
+
+    @model_validator(mode="after")
+    def response_settings(self):
+        if self.data_type == "probability":
+            if self.contrast > 0.8 or self.response_mode != "peak":
+                raise ValueError("legacy probability simulation requires a peak and contrast <= 0.8")
+        elif self.response_mode == "dip" and self.baseline <= self.contrast:
+            raise ValueError("IQ dip baseline must exceed contrast to avoid crossing the complex origin")
+        return self
+
+    def scenario_json(self):
+        if self.data_type == "probability":
+            # Explicit probability mode can reopen V1 databases unchanged.
+            return self.model_dump_json(exclude={"data_type", "response_mode", "iq_mode", "baseline", "phase_radians"})
+        return self.model_dump_json()
 
 
 class SimulatorBackend:
@@ -32,7 +62,7 @@ class SimulatorBackend:
         self.path = Path(path).resolve()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._settings = settings
-        fingerprint = hashlib.sha256(settings.model_dump_json().encode()).hexdigest()
+        fingerprint = hashlib.sha256(settings.scenario_json().encode()).hexdigest()
         self._identity = "backend:" + hashlib.sha256((str(self.path) + fingerprint).encode()).hexdigest()
         with self._connect() as db:
             db.executescript("""
@@ -61,7 +91,8 @@ class SimulatorBackend:
         return self._identity
 
     def capabilities(self):
-        return Capabilities(lower_hz=4e9, upper_hz=6e9, request_lookup=True, submission_deduplication=True)
+        return Capabilities(lower_hz=4e9, upper_hz=6e9, request_lookup=True, submission_deduplication=True,
+                            data_type=self._settings.data_type, response_mode=self._settings.response_mode)
 
     @staticmethod
     def _request_json(request):
@@ -118,13 +149,30 @@ class SimulatorBackend:
         x = np.linspace(config.start_hz, config.stop_hz, config.points)
         delta = x - self._settings.true_frequency_hz
         width = self._settings.linewidth_hz
-        signal = 0.1 + self._settings.contrast * width**2 / (delta**2 + width**2)
-        noise = rng.normal(0, self._settings.noise_std / np.sqrt(config.shots_per_point), config.points)
-        return Measurement(request_id=request.request_id, job_id=job_id, qubit=request.qubit,
-            experiment_type=request.experiment_type, config=config,
-            frequencies=x.tolist(), values=np.clip(signal + noise, 0, 1).tolist())
+        feature = self._settings.contrast * width**2 / (delta**2 + width**2)
+        common = dict(request_id=request.request_id, job_id=job_id, qubit=request.qubit,
+                      experiment_type=request.experiment_type, config=config, frequencies=x.tolist())
+        if self._settings.data_type == "probability":
+            noise = rng.normal(0, self._settings.noise_std / np.sqrt(config.shots_per_point), config.points)
+            return Measurement(**common, data_type="probability", values=np.clip(0.1 + feature + noise, 0, 1).tolist())
+        sign = -1 if self._settings.response_mode == "dip" else 1
+        signal = self._settings.baseline + sign * feature
+        i_center = signal * np.cos(self._settings.phase_radians)
+        q_center = signal * np.sin(self._settings.phase_radians)
+        if self._settings.iq_mode == "single_shot":
+            shape = (config.points, config.shots_per_point)
+            i = i_center[:, None] + rng.normal(0, self._settings.noise_std, shape)
+            q = q_center[:, None] + rng.normal(0, self._settings.noise_std, shape)
+        else:
+            noise = self._settings.noise_std / np.sqrt(config.shots_per_point)
+            i = i_center + rng.normal(0, noise, config.points)
+            q = q_center + rng.normal(0, noise, config.points)
+        return Measurement(**common, response_mode=self._settings.response_mode,
+            iq=IQData(mode=self._settings.iq_mode, i=i.tolist(), q=q.tolist()))
 
 
 def create_backend(options: dict, root: Path):
     """Composition hook; private options stay at the adapter boundary."""
-    return SimulatorBackend(root / "backend.sqlite", SimulationSettings.model_validate(options))
+    settings = SimulationSettings.model_validate(options)
+    filename = "backend-iq.sqlite" if settings.data_type == "iq" else "backend.sqlite"
+    return SimulatorBackend(root / filename, settings)

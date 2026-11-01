@@ -9,6 +9,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from .analysis import ANALYSIS_VERSION
 from .controller import Controller
 from .config import read_json_config
 from .policy import FixedPolicy
@@ -63,8 +64,8 @@ def provenance(settings: RuntimeSettings | None = None) -> dict[str, str]:
         version = result.stdout.strip()
     except (OSError, subprocess.SubprocessError):
         version = "unversioned"
-    result = {"code_version": version, "analysis_version": "lorentzian_least_squares_v1",
-            "controller_version": "0.1.0", "verification_version": "independent_spectrum_v1"}
+    result = {"code_version": version, "analysis_version": ANALYSIS_VERSION,
+            "controller_version": "0.2.0", "verification_version": "independent_spectrum_v2"}
     if settings is not None:
         result["policy"] = settings.policy
         if settings.policy == "deepseek":

@@ -1,6 +1,9 @@
 {
   "backend_factory": "qagent.backend.simulator:create_backend",
   "backend_options": {
+    "data_type": "iq",
+    "response_mode": "dip",
+    "iq_mode": "averaged",
     "true_frequency_hz": 5031700000,
     "linewidth_hz": 5000000,
     "noise_std": 0.2,

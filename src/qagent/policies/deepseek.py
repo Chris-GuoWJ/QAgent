@@ -13,7 +13,9 @@ INSTRUCTIONS = """You choose the next action for single-qubit spectroscopy calib
 Return one JSON decision matching the provided schema. Use only supplied evidence.
 Actions: scan (supply config), verify (supply candidate_id), finish (no execution arguments).
 Use Hz. Respect the task, backend capabilities and remaining budgets.
-Analyze quality before precision. Refine a credible peak; increase shots for low SNR.
+Analyze quality before precision. Refine a credible resonance peak or dip; increase shots for low SNR.
+The backend declares its data type and response mode. IQ is analyzed numerically into amplitude spectra;
+do not interpret IQ amplitudes as probabilities or invent IQ-to-state classifications.
 Verify only an existing trusted candidate meeting target uncertainty.
 Independent verification is evaluated by the controller; never invent success or evidence.
 Reference analysis_id or verification analysis_id values in evidence_ids.

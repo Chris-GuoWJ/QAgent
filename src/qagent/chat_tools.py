@@ -63,6 +63,8 @@ class ChatOperations:
         state = self.store.load(run_id)
         candidate = next((a for a in state.analyses if a.analysis_id == state.candidate_id), None)
         return {"run_id": run_id, "qubit": state.task.qubit, "stage": state.stage,
+                "measurement_type": self.controller.capabilities.data_type,
+                "response_mode": self.controller.capabilities.response_mode,
                 "outcome": state.outcome, "reason": state.reason or state.feedback,
                 "stop_requested": self.store.stopped(run_id),
                 "executor_active_here": self.is_active(run_id),

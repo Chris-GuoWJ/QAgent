@@ -2,6 +2,8 @@
 
 默认入口是自然语言 CLI：用户在终端与 DeepSeek 对话，由模型调用受控工具启动校准、查询进度、查看结果、恢复和停止任务。实验执行在后台进行，终端持续显示真实进度。当前支持单比特频谱校准，默认使用独立模拟后端，不连接真实设备。
 
+**0.3.0 起测量数据默认是 IQ。** 后端返回 I、Q 两个通道，支持已平均和逐 shot 数据；数值分析先平均复数 IQ，再计算幅度、相位并拟合共振峰或谷。新模拟任务默认生成已平均 IQ 谷谱，数据不再被限定在 0–1；模型接收分析摘要，不直接处理整组 IQ 数组。
+
 原需求见 [MVP_DESIGN.md](MVP_DESIGN.md)，技术设计见 [LANGCHAIN_IMPLEMENTATION_DESIGN.md](LANGCHAIN_IMPLEMENTATION_DESIGN.md)。当前实现范围与验证记录见 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)。
 
 ## 1. 安装和首次运行
@@ -161,7 +163,24 @@ $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 | `status(job_id)` | 排队、运行、完成、失败或无法确认 |
 | `fetch(job_id)` | 返回符合 `Measurement` 的数据、单位及原请求关联 |
 
-单位与原始格式转换在适配器内完成。此次 MVP 的公共数据契约仅覆盖单比特频谱的 Hz 轴和概率响应；其他实验类型需扩展独立的实验契约和分析器，不应把设备特有字段塞进通用控制流程。
+单位与原始格式转换在适配器内完成。公共数据契约默认覆盖单比特频谱的 Hz 轴和 IQ 响应，保留显式概率数据的兼容入口；其他实验类型需扩展独立的实验契约和分析器，不应把设备特有字段塞进通用控制流程。
+
+### IQ 数据契约
+
+`Measurement` 默认 `schema_version=2`、`data_type="iq"`、`y_unit="a.u."`、`response_mode="dip"`。后端在 `capabilities()` 声明数据类型和峰/谷模式，控制器核对实际返回值，禁止执行过程中静默切换。物理电压可显式使用单位 `V`，未标定的 IQ 不能冒称为电压。
+
+| 数据形式 | `iq.mode` | `iq.i`、`iq.q` 的形状 |
+| --- | --- | --- |
+| 已平均 IQ（默认） | `averaged` | `[频率点]`，保留后端返回的均值，不补造逐 shot 数据 |
+| 逐次采样 IQ | `single_shot` | `[频率点][shot]`，每行长度必须等于 `shots_per_point` |
+
+I/Q 允许负值和大于 1 的有限值。分析采用 `abs(mean(I) + 1j*mean(Q))`；不能使用 `mean(abs(I + 1j*Q))` 代替，也不会归一化成激发态概率。相位以弧度保存并展开。输入形状、频率轴、NaN/Inf、单位和混合类型均经过校验。
+
+默认模拟器可在 `backend_options` 配置 `response_mode` 为 `peak`/`dip`，以及 `iq_mode` 为 `averaged`/`single_shot`。切换模拟场景后使用独立 `--storage`，避免把旧任务恢复到不同参数或数据形式的后端。
+
+旧 JSON 若明确包含 `y_unit="probability"`，会继续按 V1 概率契约读取；新概率后端必须显式声明 `data_type="probability"`、`response_mode="peak"`，测量中提供 `values`，不能同时提供 `iq`。旧模拟器可用 `backend_options` 中的 `"data_type": "probability", "response_mode": "peak"` 显式选择。未标注类型/概率单位的 `values` 不会被猜测成 IQ。
+
+默认 IQ 模拟器使用新的 `backend-iq.sqlite`，旧的 `backend.sqlite` 和已有测量文件保持原样；显式概率模式保留原场景身份。数据形式和策略提示发生变化后应启动新会话，历史任务继续受后端及策略身份一致性检查约束。
 
 当前控制器按完整请求成本预留预算，接受后记账；失败的已接受任务仍计入已使用预算。真实后端的实际测量消耗结算、更精细的运行成本及任务取消尚未实现，需要在真机适配时定义。
 
@@ -171,8 +190,10 @@ $env:DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 | --- | --- |
 | `runs/journal.sqlite` | 任务快照、停止标志、动作、请求、预算和可补读事件 |
 | `runs/checkpoints.sqlite` | 以 run_id 作为 thread_id 的 LangGraph checkpoint |
-| `runs/backend.sqlite` | 示例模拟后端自己的任务记录，不由控制器直接读取 |
+| `runs/backend-iq.sqlite` | 默认 IQ 模拟后端自己的任务记录，不由控制器直接读取 |
+| `runs/backend.sqlite` | 显式概率兼容模式的后端记录；已有数据库不自动转换 |
 | `runs/<run_id>/<request_id>.json` | 本轮测量数据 |
+| `runs/<run_id>/<request_id>.spectrum.json` | IQ 均值、幅度、展开相位及单位；已平均输入不包含伪造的单次采样 |
 | `runs/<run_id>/report.json` | 结论、证据、预算、活动请求与局限 |
 
 启用对话后，`journal.sqlite` 另外保存对话会话和模型消息，采用显式 JSON 消息序列化。进程重启后的对话恢复与实验恢复分别处理；已经创建的实验通过业务日志关联，不因丢失一条聊天工具回执而重新创建。

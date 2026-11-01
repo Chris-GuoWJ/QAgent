@@ -5,7 +5,7 @@ import pytest
 from qagent.backend.simulator import SimulationSettings, SimulatorBackend
 from qagent.controller import Controller
 from qagent.policy import FixedPolicy
-from qagent.schemas import CalibrationTask, Capabilities, JobStatus, LookupResult, Measurement
+from qagent.schemas import CalibrationTask, Capabilities, IQData, JobStatus, LookupResult, Measurement
 from qagent.storage import Store
 
 
@@ -26,7 +26,8 @@ class ReplayBackend:
         self.verification_shift = verification_shift
 
     def capabilities(self):
-        return Capabilities(lower_hz=4e9, upper_hz=6e9, request_lookup=True, submission_deduplication=True)
+        return Capabilities(lower_hz=4e9, upper_hz=6e9, request_lookup=True, submission_deduplication=True,
+                            response_mode="peak")
 
     def submit(self, request):
         if request.request_id in self.jobs:
@@ -58,7 +59,8 @@ class ReplayBackend:
         y = [0.1 + 0.65 * (5e6)**2 / ((f - center)**2 + (5e6)**2) + 0.001 * math.sin(i)
              for i, f in enumerate(x)]
         return Measurement(request_id=request.request_id, job_id=job_id, qubit=request.qubit,
-            experiment_type=request.experiment_type, config=config, frequencies=x, values=y)
+            experiment_type=request.experiment_type, config=config, frequencies=x,
+            response_mode="peak", iq=IQData(i=y, q=[-0.2 * value for value in y]))
 
 
 @pytest.fixture

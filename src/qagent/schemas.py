@@ -74,6 +74,8 @@ class Capabilities(Model):
     max_shots_per_point: int = Field(default=1_000_000, ge=1)
     request_lookup: bool = False
     submission_deduplication: bool = False
+    data_type: Literal["iq", "probability"] = "iq"
+    response_mode: Literal["peak", "dip"] = "dip"
 
 
 class ExperimentRequest(Model):
@@ -104,6 +106,14 @@ class LookupResult(Model):
         return self
 
 
+class IQData(Model):
+    """Averaged i/q[frequency], or single-shot i/q[frequency][shot]."""
+
+    mode: Literal["averaged", "single_shot"] = "averaged"
+    i: list[float] | list[list[float]]
+    q: list[float] | list[list[float]]
+
+
 class Measurement(Model):
     request_id: str
     job_id: str
@@ -111,20 +121,55 @@ class Measurement(Model):
     experiment_type: str
     config: ScanConfig
     x_unit: Literal["Hz"] = "Hz"
-    y_unit: Literal["probability"] = "probability"
+    schema_version: Literal[1, 2] = 2
+    data_type: Literal["iq", "probability"] = "iq"
+    y_unit: Literal["a.u.", "V", "probability"] = "a.u."
+    response_mode: Literal["peak", "dip"] = "dip"
     frequencies: list[float]
-    values: list[float]
+    iq: IQData | None = None
+    values: list[float] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_probability(cls, data):
+        if isinstance(data, dict):
+            data = dict(data)
+            # Persisted V1 files explicitly label probability units. Never
+            # guess the meaning of an unlabelled scalar response array.
+            if "data_type" not in data and data.get("y_unit") == "probability":
+                data["data_type"] = "probability"
+                data.setdefault("schema_version", 1)
+            if data.get("data_type") == "probability":
+                data.setdefault("y_unit", "probability")
+                data.setdefault("response_mode", "peak")
+        return data
 
     @model_validator(mode="after")
     def arrays(self):
-        if len(self.frequencies) != self.config.points or len(self.values) != self.config.points:
-            raise ValueError("measurement lengths must match config.points")
+        if len(self.frequencies) != self.config.points:
+            raise ValueError("measurement frequencies must match config.points")
         if any(a >= b for a, b in zip(self.frequencies, self.frequencies[1:])):
             raise ValueError("frequencies must be strictly increasing")
         if self.frequencies[0] < self.config.start_hz or self.frequencies[-1] > self.config.stop_hz:
             raise ValueError("measurement grid exceeds requested range")
-        if any(not 0 <= value <= 1 for value in self.values):
-            raise ValueError("probability values must be between 0 and 1")
+        if self.data_type == "probability":
+            if self.iq is not None or self.y_unit != "probability" or self.response_mode != "peak":
+                raise ValueError("legacy probability data require probability units, peak mode, and no IQ")
+            if self.values is None or len(self.values) != self.config.points:
+                raise ValueError("probability values must match config.points")
+            if any(not 0 <= value <= 1 for value in self.values):
+                raise ValueError("probability values must be between 0 and 1")
+        else:
+            if self.schema_version != 2 or self.y_unit == "probability" or self.iq is None or self.values is not None:
+                raise ValueError("IQ measurements require V2, IQ units and iq channels, without probability values")
+            for channel in (self.iq.i, self.iq.q):
+                if len(channel) != self.config.points:
+                    raise ValueError("IQ channels must match config.points")
+                if self.iq.mode == "averaged":
+                    if any(isinstance(value, list) for value in channel):
+                        raise ValueError("averaged IQ channels must have shape (points,)")
+                elif any(not isinstance(row, list) or len(row) != self.config.shots_per_point for row in channel):
+                    raise ValueError("single-shot IQ channels must have shape (points, shots_per_point)")
         return self
 
 
@@ -138,6 +183,10 @@ class AnalysisResult(Model):
     linewidth_hz: float | None = None
     snr: float | None = None
     issue: str = ""
+    # Missing V1 fields retain the meaning of probability analysis records.
+    data_type: Literal["iq", "probability"] = "probability"
+    response_mode: Literal["peak", "dip"] = "peak"
+    spectrum_ref: str | None = None
 
 
 class VerificationResult(Model):
