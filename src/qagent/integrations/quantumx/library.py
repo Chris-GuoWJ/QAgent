@@ -42,3 +42,15 @@ def load_library(source_dir):
             if added:
                 sys.path.remove(str(source))
     return module, config, fingerprint
+
+
+def load_backend_class(source_dir):
+    """Load ZwBackend lazily, without loading drivers or writing source bytecode."""
+    load_library(source_dir)
+    with _IMPORT_LOCK:
+        previous = sys.dont_write_bytecode
+        try:
+            sys.dont_write_bytecode = True
+            return importlib.import_module("quantumx.backend.zw").ZwBackend
+        finally:
+            sys.dont_write_bytecode = previous

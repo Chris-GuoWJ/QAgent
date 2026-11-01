@@ -39,13 +39,3 @@ class ChatHistory:
             rows = db.execute("SELECT message FROM chat_messages WHERE session_id=? ORDER BY seq",
                               (self.session_id,)).fetchall()
         return messages_from_dict([json.loads(row[0]) for row in rows])
-
-    @property
-    def selected_run(self) -> str | None:
-        with self.store.connect() as db:
-            return db.execute("SELECT selected_run FROM chat_sessions WHERE id=?", (self.session_id,)).fetchone()[0]
-
-    def select(self, run_id: str):
-        self.store.load(run_id)
-        with self.store.connect() as db:
-            db.execute("UPDATE chat_sessions SET selected_run=? WHERE id=?", (run_id, self.session_id))

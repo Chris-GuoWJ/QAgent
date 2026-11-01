@@ -8,7 +8,7 @@ import numpy as np
 
 
 def write_array(store, namespace, filename, array):
-    directory = store.root / namespace
+    directory = store._path(store.result_root, namespace)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / filename
     temporary = path.with_name(path.name + "." + uuid4().hex + ".tmp")
@@ -20,7 +20,7 @@ def write_array(store, namespace, filename, array):
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
-    return path.relative_to(store.root).as_posix()
+    return path.relative_to(store.result_root).as_posix()
 
 
 def json_ready(value, warnings, path="result"):

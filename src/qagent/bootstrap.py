@@ -1,36 +1,60 @@
-"""The only composition root that imports configured concrete adapters."""
+"""Hardware-only composition root; reading configuration never connects devices."""
 
-import importlib
-import json
 import os
-import subprocess
 from pathlib import Path
-from typing import Literal
 
 from pydantic import Field
 
-from .analysis import ANALYSIS_VERSION
-from .controller import Controller
 from .config import read_json_config
-from .policy import FixedPolicy
+from .integrations.quantumx.parameters import QuantumXSettings
 from .schemas import Model
 from .storage import Store
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_RUNTIME = PROJECT_ROOT / "config" / "runtime.json"
+
+
 class RuntimeSettings(Model):
-    backend_factory: str = "qagent.backend.simulator:create_backend"
-    backend_options: dict = Field(default_factory=dict)
-    policy: Literal["fixed", "deepseek"] = "fixed"
+    quantumx: QuantumXSettings | None = None
     deepseek: dict = Field(default_factory=dict)
-    poll_interval: float = Field(default=0.05, ge=0, le=30)
-    quantumx: dict | None = None
+    result_dir: Path = PROJECT_ROOT / "result"
+    input_archive_dir: Path = PROJECT_ROOT / "config" / "history"
 
 
-def load_runtime(path: Path | None) -> RuntimeSettings:
-    return RuntimeSettings.model_validate(read_json_config(path)) if path else RuntimeSettings()
+def load_runtime(path=None):
+    path = Path(path or DEFAULT_RUNTIME).resolve()
+    if not path.exists():
+        raise ValueError("找不到运行配置，请先填写 " + str(path))
+    data = read_json_config(path)
+    for field in ("result_dir", "input_archive_dir"):
+        if field in data:
+            data[field] = str((path.parent / data[field]).resolve())
+    config = data.get("quantumx", {})
+    for field in ("source_dir", "hardware_config", "qubits_config", "driver_dir"):
+        if config.get(field) is not None:
+            config[field] = str((path.parent / config[field]).resolve())
+    config["parameter_files"] = {name: str((path.parent / value).resolve())
+                                 for name, value in config.get("parameter_files", {}).items()}
+    settings = RuntimeSettings.model_validate(data)
+    if settings.quantumx is None:
+        raise ValueError("config/runtime.json 必须配置 quantumx 真机实验上下文")
+    return settings
 
 
-def deepseek_settings(settings: RuntimeSettings):
+def create_store(storage, settings):
+    return Store(storage, result_root=settings.result_dir, config_root=settings.input_archive_dir)
+
+
+def create_service(store, settings, *, on_event=None):
+    from .integrations.quantumx.service import QuantumXService
+
+    if settings.quantumx is None:
+        raise ValueError("缺少 QuantumX 真机配置")
+    return QuantumXService(store, settings.quantumx, on_event=on_event)
+
+
+def deepseek_settings(settings):
     from .policies.deepseek import DeepSeekSettings
     from .credentials import load_local_credentials
 
@@ -38,44 +62,6 @@ def deepseek_settings(settings: RuntimeSettings):
     load_local_credentials(extra_keys=(config.get("api_key_env", "DEEPSEEK_API_KEY"),))
     config["model"] = config.get("model") or os.environ.get("DEEPSEEK_MODEL", "")
     if not config["model"]:
-        raise ValueError("缺少 DEEPSEEK_MODEL：请在当前目录 .env 或进程环境变量中设置模型标识")
+        raise ValueError("缺少 DEEPSEEK_MODEL，请在启动目录本地配置模型标识")
     config.setdefault("base_url", os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"))
     return DeepSeekSettings.model_validate(config)
-
-
-def create_controller(store: Store, settings: RuntimeSettings) -> Controller:
-    module, separator, name = settings.backend_factory.partition(":")
-    if not separator or not module or not name:
-        raise ValueError("backend_factory must be a trusted module:function reference")
-    factory = getattr(importlib.import_module(module), name)
-    backend = factory(settings.backend_options, store.root)
-    if settings.policy == "fixed":
-        policy = FixedPolicy()
-    else:
-        from .policies.deepseek import DeepSeekPolicy
-
-        policy = DeepSeekPolicy(deepseek_settings(settings))
-    controller = Controller(store, backend, policy)
-    if settings.quantumx is not None:
-        from .integrations.quantumx.parameters import QuantumXSettings
-        from .integrations.quantumx.service import QuantumXService
-
-        controller.quantumx_service = QuantumXService(store, QuantumXSettings.model_validate(settings.quantumx))
-    return controller
-
-
-def provenance(settings: RuntimeSettings | None = None) -> dict[str, str]:
-    try:
-        result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[2],
-                                capture_output=True, text=True, timeout=5, check=True)
-        version = result.stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        version = "unversioned"
-    result = {"code_version": version, "analysis_version": ANALYSIS_VERSION,
-            "controller_version": "0.2.0", "verification_version": "independent_spectrum_v2"}
-    if settings is not None:
-        result["policy"] = settings.policy
-        if settings.policy == "deepseek":
-            result["model_id"] = settings.deepseek.get("model") or os.environ.get("DEEPSEEK_MODEL", "")
-            result["output_method"] = settings.deepseek.get("output_method", "function_calling")
-    return result

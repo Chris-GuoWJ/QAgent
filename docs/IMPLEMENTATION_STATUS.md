@@ -1,8 +1,46 @@
 # 实现与验证记录
 
+日期：2026-11-01。当前版本：**0.5.0，QuantumX 真机专用入口**。
+
+## 0.5.0 当前交付
+
+按照用户最新规划，移除旧 Q0 频谱示例、固定示例策略、模拟后端、旧控制器/LangGraph 和 demo 命令。仅保留 DeepSeek 对话及 QuantumX 三项实验服务：读出中心、π 脉冲幅度、Ramsey 频率精调。旧版验证记录保留在下文与 Git 历史中，不代表这些已移除模块仍对外提供。
+
+默认 qagent.exe 读取 config/runtime.json。真机函数显式使用 RecordingBackend 包裹的 ZwBackend；后端根据本实验输入快照创建，接受可选 driver_dir。缺少真实配置会报错，不回退模拟模式。check 只解析配置，不连接设备。
+
+config/experiments 保存可编辑的输入默认值，实际参数、扫描轴及硬件/比特配置归档到 config/history/quantumx/<编号>/。result/quantumx/<编号>/ 保存逐次原始 IQ NPY、CSV、PulseIR、采集标签、原函数结果、analysis.json、curve.csv、iq.png、fit.png、report.json 和 summary.html。只在实际有对应数据时生成文件，CSV 可完整往返还原 NPY 数据。散点图抽样显示；拟合使用原函数完整返回数据。
+
+runs/ 继续保存业务日志和对话。真机版使用 quantumx_hardware_experiments / quantumx_hardware_sessions 表，旧模拟记录不被删除，也不阻塞真机版新任务。操作回执去重、预算预留、停止核对、退出中断和防止盲目重放继续生效。
+
+模型可选择参数和引用合格候选，但没有连续多轮自动实验直到收敛的执行器。候选只用于新实验配置副本；原函数 update=False、show_plot=False。completed 和 accepted 不等于整项校准独立验证成功。
+
+## 验证证据
+
+完整执行：
+
+~~~powershell
+$env:QAGENT_NO_ENV_FILE = "1"
+$env:LANGSMITH_TRACING = "false"
+$env:LANGCHAIN_TRACING_V2 = "false"
+.\.venv\Scripts\python.exe -m pytest -q --basetemp runs/pytest-hardware-release-fixed -p no:cacheprovider --tb=short
+~~~
+
+结果：**54 passed，0 failed，0 skipped，24.86 秒**。该测试集针对真机专用版本，替换了原示例控制器的测试；不能与旧版 175 项测试的覆盖范围直接比较。
+
+覆盖三个 QuantumX 原函数完整候选链、真机工厂快照/驱动参数传递、默认参数和覆盖规则、输入与输出目录隔离、IQ NPY/CSV 精确往返、PNG 可解码、原库源码/配置/字节码缓存哈希不变、失败和中断数据保存、无采集失败状态页、预算去重、旧模拟日志隔离、退出与回执恢复、SDK 经内存 Mock HTTP 的工具协议及配置文件访问边界。
+
+已人工查看 IQ 散点、Rabi 和 Ramsey 拟合 PNG，标签、图例和曲线显示正常。Windows 重复导出时遇到文件占用已修复：复用不可变的图像/CSV，导出错误单独记录，不改变已保存的采集或停止状态。该错误路径有专门测试。
+
+CLI 帮助已核对。当前电脑执行默认 check 会明确提示缺少 D:/QAgent/QuantumX2/configs/hardware.json，符合本机尚无真实配置的状态；未用模板替代真机输入。迁移目标电脑需填写实际 hardware_config、qubits_config 和驱动环境。
+
+所有测试仅使用 tests/support.py 中的 IQ 替身及内存 HTTP 服务，不读取真实凭证文件、不连接设备或在线模型。默认真机工厂通过替换类的边界测试验证，实际驱动加载、设备执行和在线模型决策尚未验收。未修改 QuantumX2 原文件。
+
+
+## 历史版本记录
+
 日期：2026-11-01
 
-当前实现版本：0.4.0（默认 IQ 测量，新增可选 QuantumX2 函数接入；此前版本的验证记录保留在下文）。
+以下为 0.4.0 及以前的历史实现和验证材料，示例模块已在 0.5.0 移除。
 
 ## 1. 已实现范围
 

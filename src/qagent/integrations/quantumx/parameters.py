@@ -6,13 +6,14 @@ from ...schemas import Model
 
 
 class QuantumXSettings(Model):
-    source_dir: Path = Field(default_factory=lambda: Path(__file__).resolve().parents[5] / "QuantumX2")
-    hardware_config: Path | None = None
-    qubits_config: Path | None = None
+    source_dir: Path
+    hardware_config: Path
+    qubits_config: Path
+    driver_dir: Path | None = None
+    parameter_files: dict[str, Path] = Field(default_factory=dict)
     allowed_qubits: list[int] = Field(default_factory=lambda: [1, 2])
     max_experiments: int = Field(default=8, ge=1, le=100)
     max_measurements: int = Field(default=500_000, ge=1)
-    simulation_seed: int = 42
 
     @model_validator(mode="after")
     def targets(self):

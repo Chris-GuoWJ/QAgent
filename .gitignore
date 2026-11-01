@@ -11,3 +11,6 @@ runs/
 htmlcov/
 build/
 dist/
+config/history/
+result/*
+!result/README.md

@@ -1,0 +1,17 @@
+{
+  "result_dir": "../result",
+  "input_archive_dir": "history",
+  "quantumx": {
+    "source_dir": "../../QuantumX2",
+    "hardware_config": "../../QuantumX2/configs/hardware.json",
+    "qubits_config": "../../QuantumX2/configs/qubits.json",
+    "allowed_qubits": [1, 2],
+    "max_experiments": 8,
+    "max_measurements": 500000,
+    "parameter_files": {
+      "readout_centers": "experiments/readout_centers.json",
+      "pi_amplitude": "experiments/pi_amplitude.json",
+      "ramsey_frequency": "experiments/ramsey_frequency.json"
+    }
+  }
+}

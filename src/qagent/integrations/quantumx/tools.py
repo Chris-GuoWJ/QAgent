@@ -23,7 +23,7 @@ def create_tools(operations, call_id):
 
     @tool
     def describe_quantumx_experiments() -> dict:
-        """List supported QuantumX functions, parameter schemas, target indices and simulated IQ origin."""
+        """List supported hardware experiments, input defaults, parameter schemas and target indices."""
         return service.describe()
 
     @tool(args_schema=ReadoutCentersParameters)
