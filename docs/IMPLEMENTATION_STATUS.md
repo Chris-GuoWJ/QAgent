@@ -82,3 +82,21 @@ $env:QAGENT_NO_ENV_FILE = "1"
 | 界面与知识库 | 尚未引入 Web UI、VLM、多 Agent、知识检索或设备参数自动写回 |
 
 固定策略执行闭环通过与 DeepSeek 客户端能够初始化，不构成真实模型 Agent MVP 的完整验收。后续应先完成实际 API 的协议检查，再在相同预算下比较正常与低质量数据的决策，以及相对固定策略的表现。
+
+## 4. 2026-11-01 决策工具调用兼容性修复
+
+用户报告对话正常，但校准在 `decide` 阶段连续报 `OpenAIInvalidRequestError`。本地持久化记录确认相关任务均为 0 次实验、0 次测量；原记录只保留异常类型，无法确认历史请求的完整服务端原因。
+
+检查实际安装的 LangChain 实现，发现 `with_structured_output(..., method="function_calling")` 默认发送具名强制工具调用。DeepSeek 官方文档说明思考模式拒绝强制工具调用并返回 HTTP 400。使用真实 SDK 与本地 Mock HTTP 服务复现：HTTP 400 被 LangChain 包装为同名的 `OpenAIInvalidRequestError`。这验证了兼容性问题及其错误路径，但不能替代对用户实际服务的在线验证。
+
+修复将内部决策请求改为 `tool_choice="auto"`，通过协议提示要求调用一次 `Decision`；Pydantic 解析、任务约定、预算检查及独立验证继续生效。保留 `json_mode` 选项和原有思考模式配置，不在失败时切换固定策略或重复提交实验。协议提示纳入策略身份，避免旧状态在不同协议下被静默恢复。
+
+同时从异常原因链中提取数字 HTTP 状态码，附加应用生成的排查提示，并在终端显示已记录的失败原因。仍不保留服务端错误正文、请求地址、请求头、凭证或原始响应。
+
+新增 `tests/test_decision_protocol.py`：真实 SDK 经内存 Mock HTTP 验证自动工具选择、三种思考模式配置、JSON 模式、不合法决策拒绝、HTTP 错误脱敏、包装异常状态提取和终端失败显示。闭环测试由固定基线在 Mock 服务中生成模型回复，实际运行模拟测量、数值分析及独立验证，不能证明真实模型的决策能力。
+
+本轮开发和验证设置 `QAGENT_NO_ENV_FILE=1`，关闭远程追踪，未读取用户真实凭证文件，也未发送在线 API 请求。
+
+验证结果：修复前新增协议回归测试复现 3 项失败；修复后定向测试 **24 passed**。完整回归执行 `python -m pytest -q --basetemp runs/pytest-decision-full-regression -p no:cacheprovider --tb=short`，结果为 **113 passed，0 failed**，耗时 86.02 秒。`git diff --check` 通过。现有虚拟环境为指向本仓库 `src/` 的可编辑安装，重新启动 CLI 即加载新代码。
+
+参考：[DeepSeek Chat Completions 的 tool_choice 限制](https://api-docs.deepseek.com/api/create-chat-completion/)。

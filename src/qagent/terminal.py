@@ -37,6 +37,8 @@ def format_event(event):
         analysis = event.get("analysis")
         if analysis:
             label += f"；验证频率 {analysis['frequency_hz']/1e9:.9f} GHz"
+        if event["outcome"] == "failed" and event.get("reason"):
+            label += "；" + event["reason"]
         return label
     if kind in {"submission_unknown", "job_unknown", "reconciliation_required"}:
         return "外部任务状态待核对；已阻止继续提交实验"

@@ -11,6 +11,33 @@ from .state import build_agent_view
 from .storage import Store
 
 
+def _decision_failure_message(exc: Exception) -> str:
+    """Keep useful HTTP diagnostics without retaining provider response bodies."""
+    message = "Decision provider failed: " + type(exc).__name__
+    # LangChain can wrap SDK status errors; inspect only numeric metadata from
+    # the cause chain, never stringify exceptions or retain their bodies.
+    status = None
+    cause = exc
+    for _ in range(4):
+        status = getattr(cause, "status_code", None)
+        if type(status) is int and 100 <= status <= 599:
+            break
+        cause = cause.__cause__
+        if cause is None:
+            break
+    if type(status) is int and 100 <= status <= 599:
+        message += f" (HTTP {status})"
+        if status in {400, 422}:
+            message += "; 模型服务拒绝请求参数，请检查决策输出模式与工具调用兼容性"
+        elif status in {401, 403}:
+            message += "; 模型服务鉴权或访问被拒绝，请在本机检查凭证与模型权限"
+        elif status == 404:
+            message += "; 模型或服务接口不存在，请在本机检查模型标识与接口地址"
+        elif status == 429:
+            message += "; 模型服务限制请求，请检查调用限额或稍后重试"
+    return message
+
+
 class Controller:
     def __init__(self, store: Store, backend: ExperimentBackend, policy: DecisionPolicy):
         self.store, self.backend, self.policy = store, backend, policy
@@ -97,7 +124,7 @@ class Controller:
         try:
             raw = self.policy.choose(build_agent_view(state, self.capabilities))
         except Exception as exc:
-            self._error(state, "Decision provider failed: " + type(exc).__name__)
+            self._error(state, _decision_failure_message(exc))
             return
         try:
             decision = Decision.model_validate(raw.model_dump() if isinstance(raw, Decision) else raw)

@@ -51,12 +51,21 @@ class DeepSeekPolicy:
             raise ValueError("output_method must be function_calling or json_mode")
         if settings.thinking not in {None, "enabled", "disabled"}:
             raise ValueError("thinking must be enabled or disabled")
-        fingerprint = hashlib.sha256((settings.model_dump_json() + INSTRUCTIONS).encode()).hexdigest()[:20]
+        instructions = INSTRUCTIONS
+        if settings.output_method == "function_calling":
+            instructions += "\nCall the Decision tool exactly once. Do not return plain text or JSON outside the tool call."
+        fingerprint = hashlib.sha256((settings.model_dump_json() + instructions).encode()).hexdigest()[:20]
         self.identity = "deepseek:" + fingerprint
-        self._instructions = INSTRUCTIONS + "\nDecision JSON schema:\n" + json.dumps(Decision.model_json_schema())
+        self._instructions = instructions + "\nDecision JSON schema:\n" + json.dumps(Decision.model_json_schema())
         if runnable is None:
             model = create_chat_model(settings)
-            runnable = model.with_structured_output(Decision, method=settings.output_method, include_raw=True)
+            # LangChain otherwise forces the named Decision function. DeepSeek
+            # thinking mode (and some gateways) rejects forced tool choices with
+            # HTTP 400. Auto selection retains the schema/parser and supports
+            # both thinking modes; missing or invalid calls still fail validation.
+            protocol = {"tool_choice": "auto"} if settings.output_method == "function_calling" else {}
+            runnable = model.with_structured_output(
+                Decision, method=settings.output_method, include_raw=True, **protocol)
         self._runnable = runnable
 
     def choose(self, view):
