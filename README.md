@@ -1,10 +1,12 @@
 # QAgent：超导量子校准 Agent MVP
 
-默认入口是自然语言 CLI：用户在终端与 DeepSeek 对话，由模型调用受控工具启动校准、查询进度、查看结果、恢复和停止任务。实验执行在后台进行，终端持续显示真实进度。当前支持单比特频谱校准，默认使用独立模拟后端，不连接真实设备。
+默认入口是自然语言 CLI：用户在终端与 DeepSeek 对话，由模型调用受控工具启动校准、查询进度、查看结果、恢复和停止任务。实验执行在后台进行，终端持续显示真实进度。支持单比特频谱校准，并可选接入 QuantumX2 校准函数；默认使用模拟数据，不连接真实设备。
 
 **0.3.0 起测量数据默认是 IQ。** 后端返回 I、Q 两个通道，支持已平均和逐 shot 数据；数值分析先平均复数 IQ，再计算幅度、相位并拟合共振峰或谷。新模拟任务默认生成已平均 IQ 谷谱，数据不再被限定在 0–1；模型接收分析摘要，不直接处理整组 IQ 数组。
 
 原需求见 [MVP_DESIGN.md](MVP_DESIGN.md)，技术设计见 [LANGCHAIN_IMPLEMENTATION_DESIGN.md](LANGCHAIN_IMPLEMENTATION_DESIGN.md)。当前实现范围与验证记录见 [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)。
+
+**0.4.0 增加可选的 QuantumX2 函数接入。** 在 QAgent 目录执行 `.\.venv\Scripts\qagent.exe --storage runs/quantumx2 chat --runtime configs/runtime.quantumx.json`，可用自然语言调用读出中心、π 脉冲幅度和 Ramsey 频率精调。当前使用模拟 IQ 调用 QuantumX2 原函数，逐次保存 IQ 和结果，不修改 QuantumX2。无需模型的演示命令为 `.\.venv\Scripts\qagent.exe --storage runs/quantumx2 quantumx demo`。目标使用 QuantumX 的 q1/q2 命名；完整用法、数据位置和限制见 [QuantumX2 接入说明](docs/QUANTUMX2_USAGE.md)。
 
 ## 1. 安装和首次运行
 

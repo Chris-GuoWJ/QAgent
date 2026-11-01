@@ -23,6 +23,7 @@ class RuntimeSettings(Model):
     policy: Literal["fixed", "deepseek"] = "fixed"
     deepseek: dict = Field(default_factory=dict)
     poll_interval: float = Field(default=0.05, ge=0, le=30)
+    quantumx: dict | None = None
 
 
 def load_runtime(path: Path | None) -> RuntimeSettings:
@@ -54,7 +55,13 @@ def create_controller(store: Store, settings: RuntimeSettings) -> Controller:
         from .policies.deepseek import DeepSeekPolicy
 
         policy = DeepSeekPolicy(deepseek_settings(settings))
-    return Controller(store, backend, policy)
+    controller = Controller(store, backend, policy)
+    if settings.quantumx is not None:
+        from .integrations.quantumx.parameters import QuantumXSettings
+        from .integrations.quantumx.service import QuantumXService
+
+        controller.quantumx_service = QuantumXService(store, QuantumXSettings.model_validate(settings.quantumx))
+    return controller
 
 
 def provenance(settings: RuntimeSettings | None = None) -> dict[str, str]:

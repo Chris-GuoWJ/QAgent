@@ -38,15 +38,21 @@ class ChatOperations:
         self._workers = {}
         self._pause = threading.Event()
         self._started_this_turn = False
+        self.quantumx = getattr(controller, "quantumx_service", None)
+        if self.quantumx is not None:
+            self.quantumx.bind_session(history.session_id)
 
     def begin_turn(self):
         self._started_this_turn = False
 
     def task_info(self):
-        return {"task_profile": self.profile.model_dump(),
+        result = {"task_profile": self.profile.model_dump(),
                 "capabilities": self.controller.capabilities.model_dump(),
                 "selected_run_id": self.history.selected_run,
                 "note": "Use the configured profile defaults unless the user requests tighter limits. Never read configuration files."}
+        if self.quantumx is not None:
+            result["quantumx"] = self.quantumx.describe()
+        return result
 
     def _resolve(self, run_id):
         selected = run_id or self.history.selected_run
@@ -198,6 +204,8 @@ class ChatOperations:
     def wait(self, timeout=None):
         for worker in list(self._workers.values()):
             worker.join(timeout)
+        if self.quantumx is not None:
+            self.quantumx.wait(timeout)
 
     @property
     def closing(self):
@@ -205,6 +213,8 @@ class ChatOperations:
 
     def pause(self):
         self._pause.set()
+        if self.quantumx is not None:
+            self.quantumx.pause()
 
     def close(self):
         self.pause()

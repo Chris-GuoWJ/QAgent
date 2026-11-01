@@ -1,0 +1,10 @@
+{
+  "policy": "fixed",
+  "quantumx": {
+    "source_dir": "D:/QAgent/QuantumX2",
+    "allowed_qubits": [1, 2],
+    "max_experiments": 8,
+    "max_measurements": 500000,
+    "simulation_seed": 42
+  }
+}

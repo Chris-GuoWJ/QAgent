@@ -25,6 +25,12 @@ def main(argv=None):
     chat.add_argument("--profile", type=Path)
     chat.add_argument("-n", "--message", default=argparse.SUPPRESS)
     chat.add_argument("-r", "--session", default=argparse.SUPPRESS)
+    quantumx = commands.add_parser("quantumx", help="Run/query QuantumX function integration without an LLM")
+    quantumx.add_argument("action", choices=["describe", "run", "result", "list", "compare", "stop", "demo"])
+    quantumx.add_argument("identifier", nargs="?", help="Experiment name for run, experiment ID for result/stop/compare")
+    quantumx.add_argument("second", nargs="?", help="Second experiment ID for compare")
+    quantumx.add_argument("--params", default="{}", help="Experiment parameter JSON")
+    quantumx.add_argument("--runtime", type=Path, default=Path("configs/runtime.quantumx.json"))
     for command in ["start", "resume"]:
         child = commands.add_parser(command)
         child.add_argument("--runtime", type=Path, help="Trusted runtime configuration JSON")
@@ -50,7 +56,11 @@ def main(argv=None):
         if args.command in {"start", "resume"} and args.max_steps is not None and args.max_steps < 1:
             raise ValueError("max-steps must be positive")
         store = Store(args.storage)
-        if args.command == "list":
+        if args.command == "quantumx":
+            from .integrations.quantumx.cli import execute
+
+            return execute(args, store, emit)
+        elif args.command == "list":
             emit(store.list_runs())
         elif args.command == "status":
             state = store.load(args.run_id)

@@ -1,8 +1,8 @@
 # 实现与验证记录
 
-日期：2026-10-31
+日期：2026-11-01
 
-当前实现版本：0.3.0（默认 IQ 测量；此前版本的验证记录保留在下文）。
+当前实现版本：0.4.0（默认 IQ 测量，新增可选 QuantumX2 函数接入；此前版本的验证记录保留在下文）。
 
 ## 1. 已实现范围
 
@@ -114,3 +114,17 @@ $env:QAGENT_NO_ENV_FILE = "1"
 定向验证：`tests/test_iq.py`、`tests/test_controller.py`、`tests/test_contracts.py` 共 **71 passed**。验证内容含 IQ 正负/大幅值、逐 shot 复数平均、相位展开、跨数值尺度的峰/谷拟合、IQ 模拟闭环、概率兼容闭环、旧数据库身份和类型/模式错误拒绝。所有验证禁用真实凭证文件加载及远程追踪，只使用临时测试存储，不连接真实设备或在线模型。
 
 完整回归结果：**145 passed，0 failed**，耗时 92.81 秒。执行命令为 `python -m pytest -q --basetemp runs/pytest-iq-full-regression -p no:cacheprovider --tb=short`，运行前设置 `QAGENT_NO_ENV_FILE=1` 并关闭远程追踪。默认运行配置、项目版本、设计文档源码链接和 Git 空白检查均通过。原有 `terminal.py` 未提交修改保持原状，不纳入本轮提交。
+
+## 6. 0.4.0：QuantumX2 函数接入（2026-11-01）
+
+新增可选的 `src/qagent/integrations/quantumx` 封装，直接调用当前 `D:\QAgent\QuantumX2` 工作树中的 `calc_readout_centers`、`pituner`、`freqtuner`。固定注册表和 Pydantic 参数模型限制函数与参数范围；原函数固定使用 `update=False`、`show_plot=False`。运行快照、候选传递和结果文件全部位于 QAgent 的存储目录，没有修改 QuantumX2 原内容。
+
+RecordingBackend 透传 session/run，逐次原子保存 `(shots,2)` IQ 数组、PulseIR、扫描标签和采集清单。使用独立通用报告表达制备态、振幅和 Ramsey 延迟/X-Y 轴，不把它们套入旧频率扫描 Measurement。模型只获取指标、质量和文件位置。函数完成状态、合格候选和整项校准通过独立验证明确区分。
+
+QuantumXService 增加持久化预算、调用回执去重、会话身份检查、后台执行、查询比较、停止与退出中断。失败保留部分 IQ 和整项预留预算；回执恢复不自动重放。新增自然语言工具和无需模型的 `quantumx` CLI，默认注入模拟 IQ，真实执行原函数的分类与拟合。未启用 quantumx 配置时仍使用原流程。具体用法见 [QUANTUMX2_USAGE.md](QUANTUMX2_USAGE.md)。
+
+实际运行的三项演示均完成并产生合格候选：读出采集 2 次、Rabi 41 次、Ramsey 62 次，各点 512 shots，总计保存 53760 shots。Ramsey 在模拟真值偏移 100 kHz 时拟合修正约 101.31 kHz。文件示例位于 `runs/quantumx2-demo/quantumx/`；这些结果来自模拟信号，不能证明真实设备或在线模型的有效性。
+
+新增 30 项测试覆盖真实函数的完整候选链、IQ 文件往返、扫描顺序、原库文件哈希与字节码缓存不变、错误数据拒绝、参数/目标/预算限制、重复调用、失败与中断部分保存、多个服务实例的停止核对、对话路由和回执恢复、单条指令限制，以及无需凭证的 CLI。缺少相邻 QuantumX2 时该可选测试组明确跳过。
+
+完整回归命令：`python -m pytest -q --basetemp runs/pytest-quantumx-full-regression -p no:cacheprovider --tb=short`。结果：**175 passed，0 failed，0 skipped**，耗时 **97.76 秒**。运行时设置 `QAGENT_NO_ENV_FILE=1`、`LANGSMITH_TRACING=false`、`LANGCHAIN_TRACING_V2=false`；未读取真实凭证文件，不调用在线模型或真实设备。`terminal.py` 既有用户修改保持原状，不纳入本轮提交。
