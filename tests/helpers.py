@@ -4,9 +4,9 @@ from pathlib import Path
 
 import numpy as np
 
-from qagent.integrations.quantumx.parameters import QuantumXSettings
-from qagent.integrations.quantumx.service import QuantumXService
-from qagent.storage import Store
+from qagent.experiments.parameters import QuantumXSettings
+from qagent.core.runner import QuantumXService
+from qagent.core.storage import Store
 
 SOURCE = Path(__file__).resolve().parents[2] / "QuantumX2"
 

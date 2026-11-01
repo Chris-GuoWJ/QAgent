@@ -3,11 +3,11 @@ import asyncio
 import hashlib
 import sys
 
-from .bootstrap import create_service, create_store, deepseek_settings, load_runtime
-from .chat import ChatAgent, ChatError
-from .chat_history import ChatHistory
-from .chat_tools import ChatOperations
-from .policies.deepseek import create_chat_model
+from qagent.app import create_service, create_store, deepseek_settings, load_runtime
+from qagent.agent.loop import ChatAgent, ChatError
+from qagent.agent.history import ChatHistory
+from qagent.agent.session import ChatOperations
+from qagent.agent.model import create_chat_model
 
 
 def format_event(event):

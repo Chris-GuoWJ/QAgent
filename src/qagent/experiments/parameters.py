@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pydantic import Field, model_validator
 
-from ...schemas import Model
+from qagent.core.models import Model
 
 
 class QuantumXSettings(Model):

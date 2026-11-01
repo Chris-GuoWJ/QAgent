@@ -14,3 +14,7 @@ dist/
 config/history/
 result/*
 !result/README.md
+data/state/
+data/cache/
+data/tmp/
+data/archive/

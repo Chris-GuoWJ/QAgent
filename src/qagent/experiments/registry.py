@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from .parameters import RabiParameters, RamseyParameters, ReadoutCentersParameters
+from qagent.experiments.parameters import RabiParameters, RamseyParameters, ReadoutCentersParameters
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qagent-calibration"
-version = "0.5.0"
+version = "0.6.0"
 description = "A QuantumX hardware calibration agent with recorded IQ and experiment reports"
 requires-python = ">=3.11"
 dependencies = [
@@ -29,4 +29,5 @@ namespaces = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-ra"
+addopts = "-ra --basetemp=data/tmp/pytest"
+cache_dir = "data/cache/pytest"

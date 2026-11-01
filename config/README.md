@@ -10,4 +10,4 @@
 
 runtime.json 中的相对路径以该文件所在目录为起点。默认真机配置文件名是 hardware.json 和 qubits.json，不使用 _tmpl 模板自动补齐。
 
-全体图像、IQ 和分析输出位于项目根目录 result/；对话与运行日志位于 runs/。本目录不存放模型密钥。
+全体图像、IQ 和分析输出位于项目根目录 result/；对话与运行日志位于 data/state/，由 runtime.json 的 state_dir 配置。本目录不存放模型密钥。

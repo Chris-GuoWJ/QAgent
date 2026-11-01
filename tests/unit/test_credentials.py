@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from qagent.bootstrap import RuntimeSettings, deepseek_settings
-from qagent.credentials import load_local_credentials
+from qagent.app import RuntimeSettings, deepseek_settings
+from qagent.agent.credentials import load_local_credentials
 
 
 def test_application_loads_only_allowlisted_values_without_reading_files(tmp_path):
@@ -63,7 +63,7 @@ def test_loader_error_does_not_expose_credential_content():
 
 
 def test_cli_model_settings_bootstrap_uses_injected_loader(monkeypatch):
-    import qagent.credentials as credentials
+    import qagent.agent.credentials as credentials
     import os
 
     monkeypatch.delenv("DEEPSEEK_MODEL", raising=False)

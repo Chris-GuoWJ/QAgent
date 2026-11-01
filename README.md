@@ -1,6 +1,6 @@
 # QAgent：QuantumX 真机校准 Agent
 
-当前版本 0.5.0。默认入口使用 DeepSeek 自然语言对话，调用 QuantumX2 原实验函数，通过 ZwBackend 获取真机 IQ。当前支持读出中心、π 脉冲幅度和 Ramsey 频率精调。
+当前版本 0.6.0。默认入口使用 DeepSeek 自然语言对话，调用 QuantumX2 原实验函数，通过 ZwBackend 获取真机 IQ。当前支持读出中心、π 脉冲幅度和 Ramsey 频率精调。
 
 旧 Q0 频谱示例、固定示例策略、内置模拟后端和 demo 命令已移除。QuantumX2 原文件不作修改。测试使用的 IQ 替身只在 tests 中存在。
 
@@ -23,6 +23,7 @@ py -3.11 -m venv .venv
 - quantumx.driver_dir：可选，ZWserver 驱动目录；省略时使用 QuantumX2 的 3rd_libs/ZW_driver/ZWserver。
 - quantumx.allowed_qubits：允许的目标编号，q1 对应 n=1。
 - quantumx.parameter_files：三项实验的默认参数文件。
+- state_dir：内部运行日志目录，默认 data/state。
 - result_dir / input_archive_dir：输出与输入快照目录。
 
 运行 JSON 中的相对路径以该 JSON 所在目录为起点。实验默认参数放在 config/experiments/，可编辑 n、shots、点数、扫描范围等。模型显式传入的参数覆盖默认参数；所有输入仍经过类型、范围、目标和预算校验。
@@ -52,7 +53,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\qagent.exe compare 实验编号A 实验编号B
 ~~~
 
-run 命令会执行真实设备采集；check 和 describe 不连接设备。可通过 --runtime 指定另一份运行 JSON，通过 --storage 指定业务日志目录。
+run 命令会执行真实设备采集；check 和 describe 不连接设备。可通过 --runtime 指定另一份运行 JSON，通过 --storage 临时覆盖 state_dir。
 
 对话中可说“使用 q1 上一次合格读出中心候选，调整 π 脉冲幅度”。模型使用 reference_experiment_id 将候选应用到新实验配置副本。每条用户指令最多启动一个新实验，后台运行期间可查询或停止。
 
@@ -80,15 +81,22 @@ QAgent/
 │       ├── iq.png / fit.png
 │       ├── report.json
 │       └── summary.html              # 双击查看
-└── runs/
-    └── journal.sqlite                # 对话、回执、预算、停止标志
+└── data/
+    ├── state/
+    │   ├── journal.sqlite            # 对话、回执、预算、停止标志
+    │   └── locks/                    # 执行互斥锁
+    ├── cache/                        # 测试缓存
+    ├── tmp/                          # 测试临时数据
+    └── archive/                      # 旧 runs 与构建产物
 ~~~
 
 原始 IQ 在每次采集返回后原子写入 NPY。CSV、图像和人工报告在函数结束、失败或停止核对时生成。只在实际有数据时生成对应文件，读出中心没有拟合曲线图；失败也保留已有 IQ。散点图抽样显示，NPY/CSV 保存完整数据。
 
 退出对话在下一次采集边界停止，当前调用可能仍在运行；强制关闭进程后先查询并核对旧记录，不自动重放。路径、源码或输入配置变化后请新建对话。
 
-详细边界见 [使用说明](docs/QUANTUMX2_USAGE.md)，验证记录见 [实现记录](docs/IMPLEMENTATION_STATUS.md)。历史版本说明保留在 Git 与旧设计文档中。
+目录分层及推荐阅读顺序见 [代码架构](docs/ARCHITECTURE.md)，运行边界见 [使用说明](docs/QUANTUMX2_USAGE.md)，验证记录见 [实现记录](docs/IMPLEMENTATION_STATUS.md)。历史设计统一保留在 docs/archive/。
+
+源码按 agent、core、experiments、tools、integrations、reporting、interfaces 分层，参考 Blueprint 的执行核心、模型工具和集中数据管理方式。旧 runs/ 已完整归档到 data/archive/runs-before-v0.6/；活动数据库迁至 data/state/。
 
 ## 离线开发验证
 
@@ -98,5 +106,7 @@ $env:LANGSMITH_TRACING = "false"
 $env:LANGCHAIN_TRACING_V2 = "false"
 .\.venv\Scripts\python.exe -m pytest -q
 ~~~
+
+单元测试位于 tests/unit/，原函数、Agent 和模型协议集成测试位于 tests/integration/。pytest 缓存和临时产物分别进入 data/cache/ 和 data/tmp/。
 
 测试仅使用替身 IQ 和内存 HTTP 服务，不读取真实凭证文件、不连接设备。缺少相邻 QuantumX2 源码时，依赖该源码的集成测试会明确跳过。离线通过不能替代目标电脑的驱动、设备采集和在线模型验收。

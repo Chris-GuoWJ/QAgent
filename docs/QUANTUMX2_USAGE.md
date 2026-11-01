@@ -1,4 +1,4 @@
-# QuantumX 真机接入（0.5.0）
+# QuantumX 真机接入（0.6.0）
 
 本版按用户最新规划，仅提供真机功能入口。QAgent 调用 QuantumX2 的 calc_readout_centers、pituner、freqtuner，并显式注入 RecordingBackend 包裹的 ZwBackend。没有产品级模拟模式或缺配置后的模拟回退。
 
@@ -38,7 +38,7 @@ config/runtime.json 是默认启动配置；所有相对路径以该 JSON 所在
 .\.venv\Scripts\qagent.exe stop 实验编号
 ~~~
 
-run 直接执行真机；自然语言对话也能调度同一服务。查询和比较不采集数据。全局 --storage 指定业务日志，--runtime 指定输入配置；后者也可以放在子命令后。
+run 直接执行真机；自然语言对话也能调度同一服务。查询和比较不采集数据。内部日志默认放在 data/state/，全局 --storage 可以覆盖该位置，--runtime 指定输入配置；后者也可以放在子命令后。
 
 ## 能力边界
 
@@ -62,10 +62,12 @@ result/quantumx/<编号>/summary.html 可直接在浏览器打开。它链接：
 
 ## 会话与恢复
 
+代码架构见 [ARCHITECTURE.md](ARCHITECTURE.md)。agent/ 管对话，tools/ 管工具，core/ 管执行与存储，integrations/ 管 QuantumX 适配，reporting/ 管人工结果。
+
 输入、源码、驱动路径、数据来源参与会话身份校验；变化后需新会话。工具回执丢失时只查找已有操作，不自动重放。进程退出会在下一次采集前停止；强制关闭后状态可能仍 queued/running，查询后可用停止操作核对并结束旧记录。
 
 没有自动续跑真机函数的 resume 命令，以免重复未知的采集。历史运行数据库不被删除，旧版本对话与模拟任务不转成真机任务。
 
 ## 验证
 
-tests/support.py 中的 IQ 替身仅用于离线测试，不在安装包或 CLI 注册为后端。默认真机工厂通过替换类的边界测试验证快照和驱动参数传递；三个原函数、原始数据、PNG 和 HTML 使用替身完成验证。实际设备执行及在线模型决策需要在实验电脑验证。
+tests/helpers.py 中的 IQ 替身仅用于离线测试，不在安装包或 CLI 注册为后端。默认真机工厂通过替换类的边界测试验证快照和驱动参数传递；三个原函数、原始数据、PNG 和 HTML 使用替身完成验证。实际设备执行及在线模型决策需要在实验电脑验证。

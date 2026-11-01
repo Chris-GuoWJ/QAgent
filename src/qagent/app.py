@@ -5,10 +5,10 @@ from pathlib import Path
 
 from pydantic import Field
 
-from .config import read_json_config
-from .integrations.quantumx.parameters import QuantumXSettings
-from .schemas import Model
-from .storage import Store
+from qagent.core.config import read_json_config
+from qagent.experiments.parameters import QuantumXSettings
+from qagent.core.models import Model
+from qagent.core.storage import Store
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +18,7 @@ DEFAULT_RUNTIME = PROJECT_ROOT / "config" / "runtime.json"
 class RuntimeSettings(Model):
     quantumx: QuantumXSettings | None = None
     deepseek: dict = Field(default_factory=dict)
+    state_dir: Path = PROJECT_ROOT / "data" / "state"
     result_dir: Path = PROJECT_ROOT / "result"
     input_archive_dir: Path = PROJECT_ROOT / "config" / "history"
 
@@ -27,7 +28,7 @@ def load_runtime(path=None):
     if not path.exists():
         raise ValueError("找不到运行配置，请先填写 " + str(path))
     data = read_json_config(path)
-    for field in ("result_dir", "input_archive_dir"):
+    for field in ("state_dir", "result_dir", "input_archive_dir"):
         if field in data:
             data[field] = str((path.parent / data[field]).resolve())
     config = data.get("quantumx", {})
@@ -43,11 +44,11 @@ def load_runtime(path=None):
 
 
 def create_store(storage, settings):
-    return Store(storage, result_root=settings.result_dir, config_root=settings.input_archive_dir)
+    return Store(storage or settings.state_dir, result_root=settings.result_dir, config_root=settings.input_archive_dir)
 
 
 def create_service(store, settings, *, on_event=None):
-    from .integrations.quantumx.service import QuantumXService
+    from qagent.core.runner import QuantumXService
 
     if settings.quantumx is None:
         raise ValueError("缺少 QuantumX 真机配置")
@@ -55,8 +56,8 @@ def create_service(store, settings, *, on_event=None):
 
 
 def deepseek_settings(settings):
-    from .policies.deepseek import DeepSeekSettings
-    from .credentials import load_local_credentials
+    from qagent.agent.model import DeepSeekSettings
+    from qagent.agent.credentials import load_local_credentials
 
     config = dict(settings.deepseek)
     load_local_credentials(extra_keys=(config.get("api_key_env", "DEEPSEEK_API_KEY"),))

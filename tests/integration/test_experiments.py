@@ -10,10 +10,10 @@ from PIL import Image
 import pytest
 from pydantic import ValidationError
 
-from qagent.integrations.quantumx.parameters import RabiParameters, RamseyParameters
+from qagent.experiments.parameters import RabiParameters, RamseyParameters
 from qagent.integrations.quantumx.recording_backend import RecordingBackend
-from qagent.integrations.quantumx.results import json_ready
-from support import FixtureIQBackend, SOURCE, make_service
+from qagent.reporting.serialization import json_ready
+from tests.helpers import FixtureIQBackend, SOURCE, make_service
 
 pytestmark = pytest.mark.skipif(not (SOURCE / "src/quantumx/calibration.py").exists(), reason="Local QuantumX2 source unavailable")
 
@@ -68,7 +68,7 @@ def test_original_functions_inputs_outputs_plots_and_candidates(tmp_path):
 
 
 def test_default_backend_uses_snapshot_and_driver_without_eager_connection(tmp_path, monkeypatch):
-    import qagent.integrations.quantumx.service as module
+    import qagent.core.runner as module
     seen = []
 
     class Backend:
@@ -204,7 +204,7 @@ def test_legacy_simulation_journal_does_not_block_hardware_generation(tmp_path):
 
 
 def test_export_error_never_changes_saved_acquisition_or_stop(tmp_path, monkeypatch):
-    import qagent.integrations.quantumx.presentation as presentation
+    import qagent.reporting.presentation as presentation
 
     def locked(*args):
         raise PermissionError("file is open in a viewer")

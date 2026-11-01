@@ -1,4 +1,5 @@
 {
+  "state_dir": "../data/state",
   "result_dir": "../result",
   "input_archive_dir": "history",
   "quantumx": {

@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from langchain_core.messages import messages_from_dict, messages_to_dict
 
-from .storage import Store
+from qagent.core.storage import Store
 
 
 class ChatHistory:

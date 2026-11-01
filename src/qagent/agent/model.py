@@ -4,7 +4,7 @@ import os
 
 from pydantic import Field
 
-from ..schemas import Model
+from qagent.core.models import Model
 
 
 class DeepSeekSettings(Model):

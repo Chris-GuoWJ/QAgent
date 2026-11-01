@@ -32,6 +32,6 @@ class ChatOperations:
 
 
 def create_tools(operations, call_id):
-    from .integrations.quantumx.tools import create_tools as quantumx_tools
+    from qagent.tools.experiments import create_tools as quantumx_tools
 
     return quantumx_tools(operations, call_id)

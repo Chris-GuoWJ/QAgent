@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from .config import read_json_config
+from qagent.core.config import read_json_config
 
 
 class RunBusy(RuntimeError):
@@ -19,7 +19,8 @@ class Store:
         self.root = Path(root).resolve()
         self.result_root = Path(result_root or self.root.parent / "result").resolve()
         self.config_root = Path(config_root or self.root.parent / "config" / "history").resolve()
-        for path in (self.root, self.result_root, self.config_root):
+        self.lock_root = self.root / "locks"
+        for path in (self.root, self.lock_root, self.result_root, self.config_root):
             path.mkdir(parents=True, exist_ok=True)
         self.db_path = self.root / "journal.sqlite"
 
@@ -70,7 +71,7 @@ class Store:
     def run_lock(self, name):
         from hashlib import sha256
 
-        path = self.root / (sha256(name.encode()).hexdigest() + ".lock")
+        path = self.lock_root / (sha256(name.encode()).hexdigest() + ".lock")
         handle = path.open("a+b")
         try:
             handle.seek(0, 2)

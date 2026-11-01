@@ -4,7 +4,7 @@ from contextlib import contextmanager
 
 import numpy as np
 
-from .results import write_array
+from qagent.reporting.serialization import write_array
 
 
 class ExperimentInterrupted(RuntimeError):

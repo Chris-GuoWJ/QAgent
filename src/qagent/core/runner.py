@@ -9,13 +9,13 @@ from uuid import uuid4
 
 import numpy as np
 
-from ...config import read_json_config
-from ...storage import RunBusy
-from .library import load_backend_class, load_library
-from .parameters import QuantumXSettings
-from .recording_backend import ExperimentInterrupted, RecordingBackend
-from .registry import EXPERIMENTS, get_definition
-from .results import json_ready, summarize
+from qagent.core.config import read_json_config
+from qagent.core.storage import RunBusy
+from qagent.integrations.quantumx.library import load_backend_class, load_library
+from qagent.experiments.parameters import QuantumXSettings
+from qagent.integrations.quantumx.recording_backend import ExperimentInterrupted, RecordingBackend
+from qagent.experiments.registry import EXPERIMENTS, get_definition
+from qagent.reporting.serialization import json_ready, summarize
 
 
 class QuantumXService:
@@ -262,7 +262,7 @@ class QuantumXService:
             report["finished_at"] = time.time()
             self._save(report)
             try:
-                from .presentation import render_experiment
+                from qagent.reporting.presentation import render_experiment
 
                 render_experiment(self.store, report)
             except Exception as exc:
@@ -298,7 +298,7 @@ class QuantumXService:
                                       actual_measurements=sum(r["shots"] for r in records), finished_at=time.time())
                         self._save(report)
                         try:
-                            from .presentation import render_experiment
+                            from qagent.reporting.presentation import render_experiment
 
                             render_experiment(self.store, report)
                         except Exception as exc:

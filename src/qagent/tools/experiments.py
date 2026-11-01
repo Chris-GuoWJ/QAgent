@@ -2,7 +2,7 @@
 
 from langchain_core.tools import tool
 
-from .parameters import RabiParameters, RamseyParameters, ReadoutCentersParameters
+from qagent.experiments.parameters import RabiParameters, RamseyParameters, ReadoutCentersParameters
 
 
 START_TOOLS = {"measure_readout_centers", "tune_pi_amplitude", "tune_frequency_ramsey"}

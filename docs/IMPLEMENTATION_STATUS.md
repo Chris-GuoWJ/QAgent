@@ -1,8 +1,23 @@
 # 实现与验证记录
 
-日期：2026-11-01。当前版本：**0.5.0，QuantumX 真机专用入口**。
+日期：2026-11-01。当前版本：**0.6.0，QuantumX 真机专用入口与分层目录**。
 
-## 0.5.0 当前交付
+## 0.6.0 目录整理与 Blueprint 分层参考
+
+参照本地 Quantum-Calibration-Agent-Blueprint 的 core、tools、入口、data 和测试分组方式重构目录。当前源码分为 agent、core、experiments、tools、integrations、reporting、interfaces；app.py 负责装配，原 qagent.cli 保留为兼容入口，已有 qagent.exe 无需改命令。提示词单独放在 agent/prompts.py。测试划分 unit/integration，历史设计移入 docs/archive。
+
+用户指定的 config/ 与 result/ 继续分别承载输入和人工结果。默认内部日志改为 data/state/journal.sqlite，锁放在 data/state/locks；pytest 缓存与临时数据改为 data/cache/、data/tmp/。config/runtime.json 新增 state_dir，--storage 仅覆盖内部状态位置。
+
+实际整理已完成：旧 runs 完整归档到 data/archive/runs-before-v0.6，旧 build 与旧缓存保留到 data 下的归档/缓存子目录。整理前检查 1032 个旧锁文件，未发现活动锁。主 SQLite 通过备份接口迁移，迁移前后各表记录数一致（runs 4、events 45、chat_sessions 5、chat_messages 58），完整性检查为 ok。迁移记录位于 data/archive/layout-migration.json，旧数据库和文件均保留。
+
+最终完整回归命令：python -m pytest -q --basetemp data/tmp/pytest-layout-final --tb=short。运行前设置 QAGENT_NO_ENV_FILE=1、LANGSMITH_TRACING=false、LANGCHAIN_TRACING_V2=false。结果：**56 passed，0 failed，0 skipped，26.11 秒**。新增测试覆盖默认状态路径、显式覆盖、锁目录互斥与存储重建读取；原 54 项测试随新模块路径运行通过。测试仅使用离线 IQ 替身和内存 HTTP 服务。
+
+现有 .venv/Scripts/qagent.exe --help 通过；读取默认运行配置、创建存储并重新检查 SQLite 后，确认实际状态位置为 data/state，根目录没有重新生成 runs。代码内导入已全部更新，QuantumX2 与 Blueprint 原库未修改。本轮只整理组织和内部路径，没有扩大实验能力或自动调参范围，未进行真机设备验证。
+
+当前架构与建议阅读顺序见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+
+## 0.5.0 历史交付
 
 按照用户最新规划，移除旧 Q0 频谱示例、固定示例策略、模拟后端、旧控制器/LangGraph 和 demo 命令。仅保留 DeepSeek 对话及 QuantumX 三项实验服务：读出中心、π 脉冲幅度、Ramsey 频率精调。旧版验证记录保留在下文与 Git 历史中，不代表这些已移除模块仍对外提供。
 

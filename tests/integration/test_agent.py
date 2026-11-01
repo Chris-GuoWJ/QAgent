@@ -6,11 +6,11 @@ from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 import pytest
 
-from qagent.chat import ChatAgent, ChatError
-from qagent.chat_history import ChatHistory
-from qagent.chat_tools import ChatOperations
-from qagent.terminal import serve_terminal
-from support import SOURCE, make_service
+from qagent.agent.loop import ChatAgent, ChatError
+from qagent.agent.history import ChatHistory
+from qagent.agent.session import ChatOperations
+from qagent.interfaces.terminal import serve_terminal
+from tests.helpers import SOURCE, make_service
 
 pytestmark = pytest.mark.skipif(not (SOURCE / "src/quantumx/calibration.py").exists(), reason="Local QuantumX2 source unavailable")
 
