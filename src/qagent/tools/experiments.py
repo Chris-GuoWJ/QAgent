@@ -8,6 +8,15 @@ from qagent.experiments.parameters import RabiParameters, RamseyParameters, Read
 START_TOOLS = {"measure_readout_centers", "tune_pi_amplitude", "tune_frequency_ramsey"}
 
 
+def _parameter_schema(parameters):
+    # Let the service merge the executor's defaults before validating.
+    # A Pydantic class passed to LangChain can fill omitted model arguments.
+    schema = parameters.model_json_schema()
+    for field in schema["properties"].values():
+        field.pop("default", None)
+    return schema
+
+
 def create_tools(operations, call_id):
     service = operations.quantumx
     session_id = operations.history.session_id
@@ -26,17 +35,17 @@ def create_tools(operations, call_id):
         """List supported hardware experiments, input defaults, parameter schemas and target indices."""
         return service.describe()
 
-    @tool(args_schema=ReadoutCentersParameters)
+    @tool(args_schema=_parameter_schema(ReadoutCentersParameters))
     def measure_readout_centers(**arguments) -> dict:
         """Run QuantumX calc_readout_centers in the background with raw IQ storage and held-out fidelity."""
         return start("readout_centers", arguments)
 
-    @tool(args_schema=RabiParameters)
+    @tool(args_schema=_parameter_schema(RabiParameters))
     def tune_pi_amplitude(**arguments) -> dict:
         """Run QuantumX pituner in the background. Optionally reference a completed experiment's candidate snapshot."""
         return start("pi_amplitude", arguments)
 
-    @tool(args_schema=RamseyParameters)
+    @tool(args_schema=_parameter_schema(RamseyParameters))
     def tune_frequency_ramsey(**arguments) -> dict:
         """Run QuantumX freqtuner Ramsey X/Y fine tuning around configured f10, NOT broad spectroscopy. Background execution."""
         return start("ramsey_frequency", arguments)

@@ -41,10 +41,21 @@ def main(argv=None):
 
             return launch_chat(args.storage, args.runtime, args.session, args.message)
         settings = load_runtime(args.runtime)
-        service = create_service(create_store(args.storage, settings), settings)
+        on_event = None
+        if settings.experiment_cli is not None and args.command == "run":
+            from qagent.interfaces.terminal import format_event
+
+            def on_event(event):
+                message = format_event(event)
+                if message:
+                    print(message, file=sys.stderr, flush=True)
+
+        service = create_service(create_store(args.storage, settings), settings, on_event=on_event)
         if args.command == "check":
-            emit({"configuration_valid": True, "device_connected": False, "backend": "ZwBackend",
-                  "result_directory": str(service.store.result_root),
+            external = settings.experiment_cli
+            emit({"configuration_valid": True, "device_connected": False,
+                  "backend": "experiment_cli" if external else "ZwBackend",
+                  "result_directory": str(external.output_root if external else service.store.result_root),
                   "note": "配置已解析，未连接设备；驱动和采集需在实验电脑执行验证"})
         elif args.command == "describe":
             emit(service.describe())

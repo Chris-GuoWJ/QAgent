@@ -13,10 +13,26 @@ from qagent.agent.model import create_chat_model
 def format_event(event):
     if event["event"] == "experiment_started":
         return "实验开始：" + event["experiment_type"] + "，编号 " + event["experiment_id"]
+    if event["event"] == "experiment_progress":
+        phase = {"validating": "校验计划", "waiting_device": "等待设备", "initializing": "初始化",
+                 "acquiring": "采集", "fitting": "拟合", "exporting": "保存结果"}.get(event.get("phase"), "运行")
+        points, groups = event.get("scan_points_total"), event.get("iq_groups_total")
+        points_text = str(event["scan_points_done"]) + (f"/{points}" if points is not None else "")
+        groups_text = str(event["iq_groups_done"]) + (f"/{groups}" if groups is not None else "")
+        return f"实验 {event['experiment_id']} 正在{phase}，扫描点 {points_text}，IQ {groups_text} 组"
     if event["event"] == "experiment_finished":
         text = "实验 " + event["experiment_id"] + " 状态：" + event["status"]
+        if event.get("backend") == "experiment_cli":
+            status = {"completed": "实验完成", "failed": "实验失败", "cancelled": "实验已停止",
+                      "unknown": "实验状态待确认"}[event["status"]]
+            text = status + "，编号 " + event["experiment_id"]
         if event.get("export_error_type"):
             text += "；图像/页面导出失败（" + event["export_error_type"] + "），原始数据仍已保存"
+        for key, label in (("raw_data_dir", "原始数据"), ("plot_dir", "图像"), ("result_ref", "结果清单")):
+            if event.get(key):
+                text += f"\n  {label}：{event[key]}"
+        if event.get("status") == "completed" and "plot_files" in event and not event["plot_files"]:
+            text += "\n  实验结果未提供图像"
         return text
     return None
 

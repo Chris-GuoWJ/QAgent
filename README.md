@@ -1,6 +1,6 @@
 # QAgent：QuantumX 真机校准 Agent
 
-当前版本 0.6.0。默认入口使用 DeepSeek 自然语言对话，调用 QuantumX2 原实验函数，通过 ZwBackend 获取真机 IQ。当前支持读出中心、π 脉冲幅度和 Ramsey 频率精调。
+当前版本 0.6.0。默认入口使用 DeepSeek 自然语言对话。实验可通过原有 QuantumX2 直连方式执行，也可交给独立实验 CLI。当前工具支持读出中心、π 脉冲幅度和 Ramsey 频率精调。
 
 旧 Q0 频谱示例、固定示例策略、内置模拟后端和 demo 命令已移除。QuantumX2 原文件不作修改。测试使用的 IQ 替身只在 tests 中存在。
 
@@ -14,7 +14,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[deepseek,test]"
 ~~~
 
-在同一 Python 环境中准备实验电脑已经验证可用的 QuantumX2 驱动与依赖。需要的 QuantumX2 版本必须包含 src/quantumx/calibration.py。
+使用 QuantumX2 直连方式时，在同一 Python 环境中准备实验电脑已经验证可用的驱动与依赖。该 QuantumX2 版本须包含 src/quantumx/calibration.py。使用独立实验进程时，按下文的 CLI 模式配置。
 
 编辑 config/runtime.json：
 
@@ -29,6 +29,29 @@ py -3.11 -m venv .venv
 运行 JSON 中的相对路径以该 JSON 所在目录为起点。实验默认参数放在 config/experiments/，可编辑 n、shots、点数、扫描范围等。模型显式传入的参数覆盖默认参数；所有输入仍经过类型、范围、目标和预算校验。
 
 由用户在本地配置模型凭证 DEEPSEEK_API_KEY、DEEPSEEK_MODEL，按需要配置 DEEPSEEK_BASE_URL。启动器可以加载启动目录的本地凭证文件；它们不会交给模型或写入实验报告。
+
+## 独立实验 CLI 模式
+
+QAgent 可在 Python 3.11 中运行，由实验端的 Python 3.10.8 执行采集。实验端实现 v1 协议后，另建一份运行配置，在原配置中用 `experiment_cli` 替换 `quantumx`。保留需要的 `deepseek` 和目录设置。下列路径是部署示例：
+
+~~~json
+{
+  "experiment_cli": {
+    "protocol_version": "1",
+    "python_executable": "D:/LabEnv/Scripts/python.exe",
+    "entrypoint": "D:/LabExperiments/experiment_cli.py",
+    "working_directory": "D:/LabExperiments",
+    "output_root": "D:/ExperimentResults",
+    "allowed_qubits": [1, 2],
+    "max_experiments": 8,
+    "max_measurements": 500000
+  }
+}
+~~~
+
+用 `qagent --runtime config/runtime-cli.json check` 检查本地路径，再用 `describe` 确认实验端能力。沿用 `chat`、`run`、`result`、`stop`、`compare` 等入口。终端实时显示扫描点与 IQ 组数，最终结果可查到原始数据、图像和结果清单。独立 `run` 的进度写到标准错误，标准输出保留单个最终 JSON 对象。
+
+实验端独立拥有驱动、设备锁、采集、数据保存和停止边界。接入要求与最小响应格式见 [CLI 设计方案](CLI_EXPERIMENT_DESIGN.md#15-qagent-接入约定)。QAgent 侧可用替身 CLI 离线验证，真实实验仍需用实际实验程序和设备验证。
 
 ## 使用
 

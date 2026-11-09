@@ -5,12 +5,7 @@ from pydantic import Field, model_validator
 from qagent.core.models import Model
 
 
-class QuantumXSettings(Model):
-    source_dir: Path
-    hardware_config: Path
-    qubits_config: Path
-    driver_dir: Path | None = None
-    parameter_files: dict[str, Path] = Field(default_factory=dict)
+class ExperimentLimits(Model):
     allowed_qubits: list[int] = Field(default_factory=lambda: [1, 2])
     max_experiments: int = Field(default=8, ge=1, le=100)
     max_measurements: int = Field(default=500_000, ge=1)
@@ -22,6 +17,14 @@ class QuantumXSettings(Model):
         if len(self.allowed_qubits) != len(set(self.allowed_qubits)):
             raise ValueError("allowed_qubits must be unique")
         return self
+
+
+class QuantumXSettings(ExperimentLimits):
+    source_dir: Path
+    hardware_config: Path
+    qubits_config: Path
+    driver_dir: Path | None = None
+    parameter_files: dict[str, Path] = Field(default_factory=dict)
 
 
 class CommonParameters(Model):

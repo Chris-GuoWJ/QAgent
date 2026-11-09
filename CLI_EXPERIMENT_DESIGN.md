@@ -2,7 +2,7 @@
 
 文档日期：2026-11-08
 
-状态：待实现的设计方案；本文不代表当前代码已支持这些能力。
+状态：QAgent 侧 CLI 适配已实现。实验端需实现 v1 接口并完成真机联调，接入细节见第 15 节。
 适用范围：QAgent 终端 Agent 与同一台 Windows 电脑上的真机实验系统。
 
 ## 1. 设计目标与已确定方向
@@ -370,11 +370,39 @@ Agent 可记录 `submitted`、`starting`，执行端记录 `running`、`cancelli
 7. **恢复与互斥**：Agent 重启不自动重跑；终态可从文件恢复；从两个 CLI 进程发起的实验不能同时占用同一设备。
 8. **迭代追溯**：后续阶段验证每轮新编号、新输入快照、前轮引用、候选单位、预算和停止条件；结果不完整时不继续采集。
 
-开发验证遵守项目现有约定：设置 `QAGENT_NO_ENV_FILE=1`，不访问真实凭证文件，不在离线测试中连接设备。本文只是设计文档，本轮不启动实验、不更改运行配置和现有执行行为。
+开发验证设置 `QAGENT_NO_ENV_FILE=1`，使用合成凭证和替身采集。真实执行端、驱动与设备验证在目标实验电脑完成。
 
 ## 14. 参考说明
 
 - [Python 子进程接口](https://docs.python.org/3.11/library/subprocess.html)：独立进程、输入输出管道和退出码。
 - [Python 虚拟环境](https://docs.python.org/3.11/library/venv.html)：不同解释器及其依赖环境独立部署。
 - [MCP 架构](https://modelcontextprotocol.io/docs/learn/architecture)：后续若需要标准工具服务，可另行采用 MCP；本方案第一版使用 CLI 协议。
-- 当前架构参考：`docs/ARCHITECTURE.md`。本文描述目标实现，与当前行为不一致时应以“待实现”理解。
+- 直接调用模式的架构参考见 `docs/ARCHITECTURE.md`。
+
+## 15. QAgent 接入约定
+
+### 15.1 部署方提供的信息
+
+实验端 CLI 完成后，配置实际的 Python 3.10.8 可执行文件、CLI 入口文件、工作目录和结果根目录。QAgent 依照第 5 节生成参数，实验端以 `experiment_cli` 配置中指定的解释器启动。对于采用其他命令名称或参数格式的已有脚本，可以由实验端提供一个符合 v1 的薄入口。
+
+QAgent 通过 `describe` 查询可用实验，通过 `validate` 得到预算与扫描计划，通过 `run` 采集，通过 `stop` 请求协作停止。查询和恢复直接读取同机的 `status.json` 与 `result.json`。`status` 可供其他命令行调用者使用。实验端的本地日志可帮助诊断，Agent 也把子进程标准错误保存到状态目录下的 `experiment-cli/`。
+
+### 15.2 响应字段
+
+下列为 QAgent 当前依赖的最小字段。其余执行信息可按前文扩充。
+
+| 响应 | 字段 |
+| --- | --- |
+| `describe` | `protocol_version: "1"`、`experiments` 列表，每项包含 `name` 和可选的 `defaults`。可选的 `data_origin` 为 `hardware` 或 `test` |
+| `validate` | `protocol_version`、`experiment_id`、`scan_points_total`、`iq_groups_total`、`planned_measurements` |
+| `status.json` | `protocol_version`、`experiment_id`、`seq`、`status`、当前阶段及进度计数。运行状态为 `running` 或 `cancelling`，终态为 `completed`、`failed` 或 `cancelled` |
+| `stop` | `protocol_version`、`experiment_id`、`stop_requested`。收到 `true` 表示执行端已经保存停止请求 |
+| `result.json` | `protocol_version`、`experiment_id`、`operation_key`、`experiment`、`status`、`artifacts`，以及完成时的 `scan_points_done`、`iq_groups_done`、`shots_done`。可同时提供 `metrics` 和 `quality` |
+
+`planned_measurements` 表示本次计划的 shots 数或上限。已知 IQ 组数时，该值应等于 `iq_groups_total × parameters.shots`。执行前再次验证计划。若配置变动导致执行计划与预检不同，实验端应拒绝启动并报告原因。进度计数必须与预检计划一致，采集组数增加时同时更新 `shots_done`。终态状态文件和结果清单的最终计数必须一致。
+
+成功的清单至少包含一个 `role: "raw_iq"` 的现存文件。图像条目使用 `role: "plot"`。每个文件使用任务目录内的绝对路径。可选图像没有生成时，Agent 会展示实际数据位置和图像缺失提示。
+
+引用前一轮合格候选时，QAgent 将其结果清单绝对路径写入 `input_refs.candidate_result`，同时记录 `parent_experiment_id` 和 `iteration_index`。实验端按自己的配置约定验证并应用候选。当前 QAgent 由用户逐轮启动实验并显式引用候选，自动迭代控制器仍属于后续阶段。
+
+运行期间先写持久化状态与事件，再刷新 stdout。实验端还应处理 Agent 已退出导致的输出管道关闭，并继续完成必要的清理及终态记录。
