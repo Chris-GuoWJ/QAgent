@@ -1,11 +1,18 @@
 """Narrow LangChain tools for the explicit QuantumX registry."""
 
-from langchain_core.tools import tool
+from langchain_core.tools import StructuredTool, tool
 
 from qagent.experiments.parameters import RabiParameters, RamseyParameters, ReadoutCentersParameters
+from qagent.experiments.registry import CLI_EXPERIMENTS
+from qagent.skills import calibration_skill
 
 
-START_TOOLS = {"measure_readout_centers", "tune_pi_amplitude", "tune_frequency_ramsey"}
+LEGACY_START_TOOLS = {
+    "measure_readout_centers": "calc_readout_centers",
+    "tune_pi_amplitude": "pituner",
+    "tune_frequency_ramsey": "freqtuner",
+}
+START_TOOLS = set(LEGACY_START_TOOLS) | {definition.function_name for definition in CLI_EXPERIMENTS.values()}
 
 
 def _parameter_schema(parameters):
@@ -34,6 +41,11 @@ def create_tools(operations, call_id):
     def describe_quantumx_experiments() -> dict:
         """List supported hardware experiments, input defaults, parameter schemas and target indices."""
         return service.describe()
+
+    @tool
+    def get_calibration_skill(method: str | None = None) -> dict:
+        """Look up a QuantumX calibration function's principle, parameters and result. Omit method to list the full skill and executable capabilities."""
+        return calibration_skill(method, service.describe())
 
     @tool(args_schema=_parameter_schema(ReadoutCentersParameters))
     def measure_readout_centers(**arguments) -> dict:
@@ -70,6 +82,19 @@ def create_tools(operations, call_id):
         """Persist a stop request for a QuantumX experiment. Stops further IQ acquisitions at the next call boundary."""
         return service.stop(experiment_id)
 
-    return [describe_quantumx_experiments, measure_readout_centers, tune_pi_amplitude,
-            tune_frequency_ramsey, get_experiment_result, list_experiment_results,
+    def cli_tool(capability):
+        definition = CLI_EXPERIMENTS[capability["name"]]
+
+        def execute(**arguments):
+            return start(definition.name, arguments)
+
+        return StructuredTool.from_function(
+            execute, name=definition.function_name, args_schema=_parameter_schema(definition.parameters),
+            description=definition.description + "。明确要求执行时提交后台实验。原理和参数可查询 get_calibration_skill。",
+        )
+
+    capabilities = service.describe()
+    starts = ([cli_tool(item) for item in capabilities["experiments"]] if capabilities.get("backend") == "experiment_cli"
+              else [measure_readout_centers, tune_pi_amplitude, tune_frequency_ramsey])
+    return [describe_quantumx_experiments, get_calibration_skill, *starts, get_experiment_result, list_experiment_results,
             compare_experiment_results, stop_quantumx_experiment]

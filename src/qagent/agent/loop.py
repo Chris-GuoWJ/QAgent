@@ -5,7 +5,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from pydantic import ValidationError
 
 from qagent.agent.session import create_tools
-from qagent.tools.experiments import START_TOOLS
+from qagent.tools.experiments import LEGACY_START_TOOLS, START_TOOLS
 
 from qagent.agent.prompts import SYSTEM
 
@@ -35,12 +35,13 @@ class ChatAgent:
             raise ChatError("工具调用缺少编号，未执行操作")
         self._call_id = call_id
         try:
-            if name not in self.tools:
-                result = {"error": "此工具不可用，只能调用注册的 QuantumX 实验工具"}
-            elif recovering and name in START_TOOLS:
+            selected = self.tools.get(name) or self.tools.get(LEGACY_START_TOOLS.get(name))
+            if recovering and name in START_TOOLS:
                 result = self.operations.quantumx.recover_operation(self.history.session_id, call_id)
+            elif selected is None:
+                result = {"error": "此工具不可用，只能调用注册的 QuantumX 实验工具"}
             else:
-                result = self.tools[name].invoke(arguments)
+                result = selected.invoke(arguments)
         except ValidationError:
             result = {"error": "工具参数不符合实验约定，请修正参数"}
         except (ValueError, KeyError) as exc:

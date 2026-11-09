@@ -26,6 +26,9 @@ qagent = "qagent.cli:main"
 where = ["src"]
 namespaces = false
 
+[tool.setuptools.package-data]
+"qagent.skills" = ["single_qubit_calibration/SKILL.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

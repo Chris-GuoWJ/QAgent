@@ -7,7 +7,7 @@ import time
 from uuid import uuid4
 
 from qagent.core.experiment_journal import ACTIVE_STATES, ExperimentJournal
-from qagent.experiments.registry import EXPERIMENTS, get_definition
+from qagent.experiments.registry import CLI_EXPERIMENTS, get_definition
 from qagent.integrations.experiment_cli.client import ExperimentCLI
 from qagent.integrations.experiment_cli.protocol import (
     TERMINAL_STATES, Event, Progress, check_identity, checked_path, decode_object,
@@ -41,13 +41,33 @@ class CLIExperimentService(ExperimentJournal):
                 if not isinstance(item, dict) or not isinstance(item.get("name"), str):
                     raise ValueError("实验 CLI 返回了无效的实验定义")
                 name = item["name"]
-                if name in EXPERIMENTS:
-                    definition = get_definition(name)
-                    defaults = definition.parameters.model_validate(item.get("defaults", {})).model_dump()
-                    supported[name] = {
-                        "name": name, "description": definition.description, "defaults": defaults,
-                        "parameters": definition.parameters.model_json_schema(),
-                    }
+                if name not in CLI_EXPERIMENTS:
+                    continue
+                definition = CLI_EXPERIMENTS[name]
+                if item.get("method", definition.function_name) != definition.function_name or name in supported:
+                    raise ValueError("实验 CLI 的实验名和函数名不匹配或重复")
+                fields = definition.parameters.model_fields
+                required = {key for key, field in fields.items() if field.is_required()}
+                raw_defaults = item.get("defaults", {})
+                if not isinstance(raw_defaults, dict) or set(raw_defaults) - fields.keys():
+                    raise ValueError("实验 CLI 返回了未注册的默认参数")
+                declared_required = item.get("required_parameters", sorted(required))
+                if (not isinstance(declared_required, list)
+                        or not all(isinstance(key, str) and key in fields for key in declared_required)
+                        or set(declared_required) != required):
+                    raise ValueError("实验 CLI 的必填参数与 QAgent 参数定义不一致")
+                defaults = {key: field.get_default(call_default_factory=True)
+                            for key, field in fields.items() if not field.is_required()}
+                defaults.update({key: value for key, value in raw_defaults.items() if key not in required})
+                if not required:
+                    defaults = definition.parameters.model_validate(defaults).model_dump()
+                supported[name] = {
+                    "name": name, "method": definition.function_name,
+                    "description": definition.description, "defaults": defaults,
+                    "required_parameters": sorted(required),
+                    "iq_groups_per_scan_point": item.get("iq_groups_per_scan_point"),
+                    "parameters": definition.parameters.model_json_schema(),
+                }
             self._capabilities = supported
         return {
             "backend": "experiment_cli", "protocol_version": "1",
@@ -134,10 +154,11 @@ class CLIExperimentService(ExperimentJournal):
         ):
             raise ValueError("结果清单的最终采集计数与状态不一致")
         metrics, quality = result.get("metrics", {}), result.get("quality", {})
-        if not isinstance(metrics, dict) or not isinstance(quality, dict):
+        units = result.get("metric_units", {})
+        if not all(isinstance(value, dict) for value in (metrics, quality, units)):
             raise ValueError("实验结果的指标或质量字段格式无效")
         return {
-            "result_ref": str(result_path), "metrics": metrics, "quality": quality,
+            "result_ref": str(result_path), "metrics": metrics, "metric_units": units, "quality": quality,
             "raw_data_dir": str(raw[0].parent) if raw else None,
             "raw_files": [str(path) for path in raw],
             "plot_dir": str(plots[0].parent) if plots else None,
@@ -197,9 +218,10 @@ class CLIExperimentService(ExperimentJournal):
 
     def start(self, name, parameters, session_id, call_id):
         self.describe()
+        definition = get_definition(name, definitions=CLI_EXPERIMENTS)
+        name = definition.name
         if name not in self._capabilities:
             raise ValueError("实验 CLI 未声明支持该实验")
-        definition = get_definition(name)
         params = definition.parameters.model_validate(self._capabilities[name]["defaults"] | parameters)
         if params.n not in self.settings.allowed_qubits:
             raise ValueError("目标比特超出 allowed_qubits 约定")
@@ -224,7 +246,7 @@ class CLIExperimentService(ExperimentJournal):
                         raise ValueError("已有未结束或待核对的实验，请先查询或停止")
             own = [row for row in rows if row[1] == session_id and row[4] == self.identity]
             used = sum(row[2] for row in own)
-            if len(own) >= self.settings.max_experiments or used + definition.measurement_cost(params) > self.settings.max_measurements:
+            if len(own) >= self.settings.max_experiments:
                 raise ValueError("实验将超过本会话预算")
             experiment_id = uuid4().hex
             directory = self._directory(experiment_id)
@@ -258,6 +280,7 @@ class CLIExperimentService(ExperimentJournal):
                 raise ValueError("实际计划将超过本会话预算")
             report = {
                 "experiment_id": experiment_id, "operation_key": key, "experiment_type": name,
+                "method": definition.function_name,
                 "backend": "experiment_cli", "data_origin": self._data_origin,
                 "n": params.n, "parameters": params.model_dump(), "artifact_directory": str(directory),
                 "request_path": str(request_file), "status": "starting", "seq": 0,

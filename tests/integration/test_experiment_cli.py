@@ -128,3 +128,45 @@ def test_candidate_reference_is_passed_in_next_request(runtime):
     assert request["input_refs"] == {"candidate_result": first["result_ref"]}
     assert request["parent_experiment_id"] == first["experiment_id"]
     assert request["iteration_index"] == 1
+
+
+def test_function_tools_follow_executor_capabilities_and_skill_is_read_only(runtime):
+    path, worker = runtime
+    (worker / "extended-catalog").touch()
+    service = open_service(path)
+    history = ChatHistory(service.store, service.identity)
+    model = ScriptedModel([
+        call("get_calibration_skill", {"method": "calCavityClear"}, identifier="skill"),
+        AIMessage(content="已说明腔清空原理。"),
+        call("calT1", {"points": 7, "delay_stop_s": 12e-6}, identifier="measurement"),
+        AIMessage(content="已提交 T1 测量。"),
+    ])
+    agent = ChatAgent(model, ChatOperations(service, history))
+    assert {"calc_readout_centers", "pituner", "calT1", "calXYZDelay"} <= agent.tools.keys()
+    assert not {"freqtuner", "calCavityClear", "measure_readout_centers"} & agent.tools.keys()
+    assert set(agent.tools["calXYZDelay"].args_schema["required"]) == {"z_amp", "z_duration_s"}
+    agent.respond("解释腔清空")
+    skill = json.loads(next(message.content for message in history.messages() if isinstance(message, ToolMessage)))
+    assert not skill["runnable"] and "Ramsey" in skill["guide"]
+    assert service.list_results()["experiments"] == []
+
+    agent.respond("测量 T1，扫 7 个点到 12 微秒")
+    service.wait()
+    report = service.list_results()["experiments"][0]
+    assert report["status"] == "completed" and report["method"] == "calT1"
+    assert report["reserved_measurements"] == 140 and report["metric_units"] == {"sample": "s"}
+    request = json.loads(Path(report["request_path"]).read_text(encoding="utf-8"))
+    assert request["experiment"] == "t1"
+    assert request["parameters"]["delay_stop_s"] == 12e-6
+
+
+def test_cli_uses_preflight_measurements_for_multigroup_budget(runtime, capsys):
+    path, worker = runtime
+    (worker / "extended-catalog").touch()
+    config = json.loads(path.read_text(encoding="utf-8"))
+    config["experiment_cli"]["max_measurements"] = 41
+    path.write_text(json.dumps(config), encoding="utf-8")
+    assert main(["--runtime", str(path), "run", "calXYZDelay", "--params",
+                 '{"shots":10,"points":7,"z_amp":0.1,"z_duration_s":1e-8}']) == 2
+    assert "实际计划将超过" in capsys.readouterr().err
+    assert not list((path.parent / "runs").glob("*/fixture-runs"))

@@ -105,6 +105,7 @@ class QuantumXService(ExperimentJournal):
 
     def start(self, name, parameters, session_id, call_id):
         definition = get_definition(name)
+        name = definition.name
         params = definition.parameters.model_validate(self.defaults.get(name, {}) | parameters)
         if params.n not in self.settings.allowed_qubits:
             raise ValueError("目标比特超出 QuantumX 的 allowed_qubits 约定")

@@ -47,7 +47,7 @@ QAgent 在运行配置中使用 `experiment_cli` 配置段。若实验系统已�
 | `stop --experiment-dir <任务目录>` | 持久化停止请求，返回包含协议版本、`experiment_id` 和 `stop_requested` 的 JSON 对象。执行进程在可停止的边界结束后记录 `cancelled`。 |
 | `status --experiment-dir <任务目录>` | 可供人工查询当前状态。QAgent 的查询和恢复直接读取 `status.json` 与 `result.json`。 |
 
-`describe` 和 `validate` 可在无设备连接时运行。QAgent 当前识别 `readout_centers`（读出中心）、`pi_amplitude`（π 脉冲幅度）和 `ramsey_frequency`（Ramsey 精调）。实验端可按实际能力逐项接入。
+`describe` 和 `validate` 可在无设备连接时运行。QAgent 按 `describe` 中已适配的实验注册工具，模型侧工具名使用 `method` 对应的校准函数名，请求仍发送原实验标识 `name`。函数及其参数说明见 [单比特校准 skill](src/qagent/skills/single_qubit_calibration/SKILL.md)。
 
 已知采集组数时，`planned_measurements` 等于 `iq_groups_total × parameters.shots`。若总数无法预知，允许将相应总数字段设为 `null`，同时提供正整数 shots 上限。运行时应遵守预检计划和设备约束。
 

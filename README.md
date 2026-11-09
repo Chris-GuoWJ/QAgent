@@ -1,6 +1,6 @@
 # QAgent：QuantumX 真机校准 Agent
 
-当前版本 0.6.0。默认入口使用 DeepSeek 自然语言对话。实验可通过原有 QuantumX2 直连方式执行，也可交给独立实验 CLI。当前工具支持读出中心、π 脉冲幅度和 Ramsey 频率精调。
+当前版本 0.6.0。默认入口使用 DeepSeek 自然语言对话。实验可通过原有 QuantumX2 直连方式执行，也可交给独立实验 CLI。CLI 模式按执行端开放的校准函数注册工具。
 
 旧 Q0 频谱示例、固定示例策略、内置模拟后端和 demo 命令已移除。QuantumX2 原文件不作修改。测试使用的 IQ 替身只在 tests 中存在。
 
@@ -50,6 +50,10 @@ QAgent 可在 Python 3.11 中运行，由实验端的 Python 3.10.8 执行采集
 ~~~
 
 用 `qagent --runtime config/runtime-cli.json check` 检查本地路径，再用 `describe` 确认实验端能力。沿用 `chat`、`run`、`result`、`stop`、`compare` 等入口。终端实时显示扫描点与 IQ 组数，最终结果可查到原始数据、图像和结果清单。独立 `run` 的进度写到标准错误，标准输出保留单个最终 JSON 对象。
+
+新版 QuantumX CLI 可开放 `calc_readout_centers`、`pituner`、`freqtuner`、`spectroscopy`、`calT1`、`calT2Echo`、`calXYZDelay`、`calPiHalf` 和 `calDRAG`。例如可在对话中请求测量 T1，也可用 `qagent --runtime config/runtime-cli.json run calT1` 执行。已有实验标识如 `t1`、`readout_centers` 也可用。
+
+Agent 通过 `get_calibration_skill` 按函数名查询实验原理、参数和结果。完整的 [单比特校准 skill](src/qagent/skills/single_qubit_calibration/SKILL.md) 也包含当前仅能用于解释和规划的类方法。
 
 实验端独立拥有驱动、设备锁、采集、数据保存和停止边界。接入要求与最小响应格式见 [CLI 设计方案](CLI_EXPERIMENT_DESIGN.md#15-qagent-接入约定)。QAgent 侧可用替身 CLI 离线验证，真实实验仍需用实际实验程序和设备验证。
 

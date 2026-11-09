@@ -24,10 +24,17 @@ def main():
     assert "DEEPSEEK_API_KEY" not in os.environ
     version = {"protocol_version": "1"}
     if args.command == "describe":
-        print(json.dumps({**version, "data_origin": "test", "experiments": [
+        experiments = [
             {"name": "readout_centers", "defaults": {"shots": 20}},
             {"name": "pi_amplitude", "defaults": {"shots": 20}},
-        ]}))
+        ]
+        if Path("extended-catalog").exists():
+            experiments += [
+                {"name": "t1", "method": "calT1", "defaults": {"shots": 20}, "iq_groups_per_scan_point": 1},
+                {"name": "xy_z_delay", "method": "calXYZDelay", "defaults": {"z_amp": None, "z_duration_s": None},
+                 "required_parameters": ["z_amp", "z_duration_s"], "iq_groups_per_scan_point": 3},
+            ]
+        print(json.dumps({**version, "data_origin": "test", "experiments": experiments}))
         return 0
 
     directory = args.request.parent if args.request else args.experiment_dir
@@ -43,7 +50,8 @@ def main():
     request = json.loads(args.request.read_text(encoding="utf-8"))
     shots = request["parameters"]["shots"]
     points = request["parameters"].get("points", 1)
-    groups = 2 if request["experiment"] == "readout_centers" else points
+    groups_per_point = {"readout_centers": 2, "xy_z_delay": 3}.get(request["experiment"], 1)
+    groups = points * groups_per_point
     totals = {"scan_points_total": points, "iq_groups_total": groups}
     if args.command == "validate":
         print(json.dumps({**identity, **totals, "planned_measurements": groups * shots}))
@@ -99,6 +107,7 @@ def main():
             **identity, **counts, "operation_key": request["operation_key"],
             "experiment": request["experiment"], "status": status,
             "artifacts": artifacts, "metrics": {"sample": 1.0},
+            "metric_units": {"sample": "s"},
             "quality": {"accepted": not cancelled, "independently_verified": False},
         })
     emit(status, status, stdout=not Path("omit-terminal-event").exists())

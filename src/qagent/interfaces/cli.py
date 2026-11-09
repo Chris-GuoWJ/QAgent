@@ -26,7 +26,7 @@ def main(argv=None):
             child.add_argument("-n", "--message", default=argparse.SUPPRESS)
             child.add_argument("-r", "--session", default=argparse.SUPPRESS)
         if name == "run":
-            child.add_argument("experiment", choices=("readout_centers", "pi_amplitude", "ramsey_frequency"))
+            child.add_argument("experiment", help="QuantumX calibration function name or CLI experiment ID")
             child.add_argument("--params-file", type=Path, help="JSON input parameters")
             child.add_argument("--params", default="{}", help="Explicit parameter JSON overrides")
         if name in {"result", "stop", "compare"}:
