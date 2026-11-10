@@ -160,6 +160,30 @@ def test_function_tools_follow_executor_capabilities_and_skill_is_read_only(runt
     assert request["parameters"]["delay_stop_s"] == 12e-6
 
 
+def test_workflow_tool_exposes_physical_prerequisites_and_only_registered_experiments(runtime):
+    path, worker = runtime
+    (worker / "extended-catalog").touch()
+    service = open_service(path)
+    history = ChatHistory(service.store, service.identity)
+    model = ScriptedModel([
+        call("get_single_qubit_workflow", {}, identifier="workflow"),
+        AIMessage(content="已查询完整流程和可执行环节。"),
+    ])
+    agent = ChatAgent(model, ChatOperations(service, history))
+    agent.respond("完整单比特标定从哪开始？找频峰不稳定时下一步做什么？")
+    reply = json.loads(next(message.content for message in model.inputs[-1] if isinstance(message, ToolMessage)))
+    registered = reply["registered_experiments"]
+    assert registered["calc_readout_centers"] == "calc_readout_centers"
+    assert registered["calT1"] == "calT1"
+    assert "calReadoutTiming" not in registered and "calRBAcceptance" not in registered
+    guide = reply["guide"]
+    positions = [guide.index(f"`{method}`") for method in
+                 ("calReadoutTiming", "spectroscopy", "calFluxSpectrum", "pituner", "calc_readout_centers",
+                  "calXYZDelay", "calPiHalf", "freqtuner", "calZDistortion", "calRotationAmplitude", "calRBAcceptance")]
+    assert positions == sorted(positions)
+    assert service.list_results()["experiments"] == []
+
+
 def test_cli_uses_preflight_measurements_for_multigroup_budget(runtime, capsys):
     path, worker = runtime
     (worker / "extended-catalog").touch()

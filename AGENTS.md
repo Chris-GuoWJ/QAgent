@@ -54,6 +54,8 @@ $qagentRuntime = "config/runtime-cli.json"
 
 CLI 模式以执行端 `describe` 为准。新版 QuantumX 提供 `calc_readout_centers`、`pituner`、`freqtuner`、`spectroscopy`、`calT1`、`calT2Echo`、`calXYZDelay`、`calPiHalf` 和 `calDRAG`。完整的 [单比特校准 skill](src/qagent/skills/single_qubit_calibration/SKILL.md) 收录了 36 个公开类方法。目录中的 `runnable` 表示当前连接的执行端允许 QAgent 调用该方法。
 
+询问“从 VNA 扫完腔开始，单比特标定怎么做？”或“q5 卡在哪一步，下一步做什么？”时，Agent 查询[单比特校准流程 skill](src/qagent/skills/single-qubit-workflow/SKILL.md)和实际记录，区分物理依赖、当前可运行的实验与需要现场完成的环节。流程查询不会启动采集。
+
 ## 架构与运行机制
 
 ```text

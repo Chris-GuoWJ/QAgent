@@ -5,6 +5,12 @@ from importlib.resources import files
 
 
 @lru_cache(maxsize=1)
+def single_qubit_workflow():
+    resource = files(__package__).joinpath("single-qubit-workflow", "SKILL.md")
+    return resource.read_text(encoding="utf-8").split("\n---\n", maxsplit=1)[-1].strip()
+
+
+@lru_cache(maxsize=1)
 def calibration_entries():
     resource = files(__package__).joinpath("single_qubit_calibration", "SKILL.md")
     sections = resource.read_text(encoding="utf-8").split("\n## ")[1:]

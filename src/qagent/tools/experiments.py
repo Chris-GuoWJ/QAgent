@@ -4,7 +4,7 @@ from langchain_core.tools import StructuredTool, tool
 
 from qagent.experiments.parameters import RabiParameters, RamseyParameters, ReadoutCentersParameters
 from qagent.experiments.registry import CLI_EXPERIMENTS
-from qagent.skills import calibration_skill
+from qagent.skills import calibration_skill, single_qubit_workflow
 
 
 LEGACY_START_TOOLS = {
@@ -46,6 +46,11 @@ def create_tools(operations, call_id):
     def get_calibration_skill(method: str | None = None) -> dict:
         """Look up a QuantumX calibration function's principle, parameters and result. Omit method to list the full skill and executable capabilities."""
         return calibration_skill(method, service.describe())
+
+    @tool
+    def get_single_qubit_workflow() -> dict:
+        """Read the full single-qubit calibration order after VNA, stage prerequisites, acceptance criteria and how to diagnose what to do next. Does not start measurements."""
+        return {"guide": single_qubit_workflow(), "registered_experiments": registered_experiments}
 
     @tool(args_schema=_parameter_schema(ReadoutCentersParameters))
     def measure_readout_centers(**arguments) -> dict:
@@ -94,7 +99,11 @@ def create_tools(operations, call_id):
         )
 
     capabilities = service.describe()
-    starts = ([cli_tool(item) for item in capabilities["experiments"]] if capabilities.get("backend") == "experiment_cli"
-              else [measure_readout_centers, tune_pi_amplitude, tune_frequency_ramsey])
-    return [describe_quantumx_experiments, get_calibration_skill, *starts, get_experiment_result, list_experiment_results,
-            compare_experiment_results, stop_quantumx_experiment]
+    if capabilities.get("backend") == "experiment_cli":
+        starts = [cli_tool(item) for item in capabilities["experiments"]]
+        registered_experiments = {start_tool.name: start_tool.name for start_tool in starts}
+    else:
+        starts = [measure_readout_centers, tune_pi_amplitude, tune_frequency_ramsey]
+        registered_experiments = {LEGACY_START_TOOLS[start_tool.name]: start_tool.name for start_tool in starts}
+    return [describe_quantumx_experiments, get_calibration_skill, get_single_qubit_workflow, *starts,
+            get_experiment_result, list_experiment_results, compare_experiment_results, stop_quantumx_experiment]

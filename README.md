@@ -55,6 +55,8 @@ QAgent 可在 Python 3.11 中运行，由实验端的 Python 3.10.8 执行采集
 
 Agent 通过 `get_calibration_skill` 按函数名查询实验原理、参数和结果。完整的 [单比特校准 skill](src/qagent/skills/single_qubit_calibration/SKILL.md) 也包含当前仅能用于解释和规划的类方法。
 
+在 `chat` 里询问“从 VNA 腔谱结束到单比特门验收，完整流程是什么？”或“q5 当前卡在哪一步？”时，Agent 会用 `get_single_qubit_workflow` 查询[单比特校准流程 skill](src/qagent/skills/single-qubit-workflow/SKILL.md)，按实验前置条件和已有证据给出下一步。未开放的环节会标为现场交接。
+
 实验端独立拥有驱动、设备锁、采集、数据保存和停止边界。接入要求与最小响应格式见 [CLI 设计方案](CLI_EXPERIMENT_DESIGN.md#15-qagent-接入约定)。QAgent 侧可用替身 CLI 离线验证，真实实验仍需用实际实验程序和设备验证。
 
 ## 使用
