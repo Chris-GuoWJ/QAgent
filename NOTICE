@@ -1,0 +1,25 @@
+QAgent
+Copyright 2026 Chris-GuoWJ
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+Architecture reference
+----------------------
+QAgent's architecture was informed by NVIDIA's
+Quantum-Calibration-Agent-Blueprint:
+https://github.com/NVIDIA/Quantum-Calibration-Agent-Blueprint
+
+The referenced project is licensed under Apache-2.0. Its source files
+identify NVIDIA CORPORATION & AFFILIATES as the copyright holders.
+
+The architectural reference covers the separation of experiment execution
+and storage, model-facing tool organization, centralized runtime data,
+and unit/integration test organization. See docs/ARCHITECTURE.md for the
+correspondence with QAgent's modules.
+
+This acknowledgement does not imply endorsement by NVIDIA or transfer
+ownership of NVIDIA's work to QAgent's authors.
+
+External experiment systems, vendor drivers, and dependencies retain
+their respective licenses. This repository's license does not relicense
+those external components.

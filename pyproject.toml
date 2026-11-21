@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "qagent-calibration"
 version = "0.6.0"
 description = "A QuantumX hardware calibration agent with recorded IQ and experiment reports"
+license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = [
   "pydantic>=2.7,<3",
@@ -21,6 +22,9 @@ test = ["pytest>=8,<10"]
 
 [project.scripts]
 qagent = "qagent.cli:main"
+
+[tool.setuptools]
+license-files = ["LICENSE", "NOTICE"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

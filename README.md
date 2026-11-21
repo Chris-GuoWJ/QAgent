@@ -139,3 +139,11 @@ $env:LANGCHAIN_TRACING_V2 = "false"
 单元测试位于 tests/unit/，原函数、Agent 和模型协议集成测试位于 tests/integration/。pytest 缓存和临时产物分别进入 data/cache/ 和 data/tmp/。
 
 测试仅使用替身 IQ 和内存 HTTP 服务，不读取真实凭证文件、不连接设备。缺少相邻 QuantumX2 源码时，依赖该源码的集成测试会明确跳过。离线通过不能替代目标电脑的驱动、设备采集和在线模型验收。
+
+## 许可证与参考项目
+
+QAgent 采用 [Apache License 2.0](LICENSE)，Copyright 2026 Chris-GuoWJ。允许的使用与分发方式以许可证全文为准。
+
+架构设计参考了 NVIDIA 的 [Quantum-Calibration-Agent-Blueprint](https://github.com/NVIDIA/Quantum-Calibration-Agent-Blueprint)：执行核心与存储职责划分、模型工具组织、集中数据目录和测试分层。具体对应见[代码架构](docs/ARCHITECTURE.md#与-blueprint-的对应)，来源说明见 [NOTICE](NOTICE)。
+
+QuantumX 实验系统、厂商驱动和各依赖的许可由其各自项目规定；QAgent 的许可证不替代这些许可。上述参考说明不表示 NVIDIA 对 QAgent 的认可或背书。
